@@ -46,6 +46,14 @@
   },
   "entity": {
     "sensor": {
+      "notice_content": {
+        "name": "Notice content",
+        "state_attributes": {
+          "notices": { "name": "Notices" },
+          "displayed_count": { "name": "Displayed notices" },
+          "has_more": { "name": "More notices available" }
+        }
+      },
       "unread_notices": {
         "name": "Unread notices"
       },

@@ -14,6 +14,7 @@ summary sensors, deadline calendars and a new-item event entity.
 ## Features
 
 - Unread and unreplied notice counts
+- Readable notice text with a native dashboard card
 - Unread message count
 - Unsubmitted, overdue and urgent homework counts
 - Next homework deadline sensor
@@ -23,8 +24,9 @@ summary sensors, deadline calendars and a new-item event entity.
 - Config flow, reauthentication and configurable 5-60 minute polling
 
 The integration never marks an item as read, signs a notice, submits homework,
-makes a payment or calls another state-changing endpoint. Notice bodies and
-attachments are not exposed in this version.
+makes a payment or calls another state-changing endpoint. Notice text comes
+from the existing `GetAllNotices` response, without any additional requests.
+Attachments are not downloaded or displayed.
 
 ## Install with HACS
 
@@ -38,6 +40,25 @@ attachments are not exposed in this version.
 Only one HKTE account can be configured. The default update interval is 15
 minutes and can be changed to a value from 5 to 60 minutes in integration
 options.
+
+## Read notice content
+
+Version 0.2.0 adds a **Notice content** sensor for every child. Its `notices`
+attribute contains the newest 20 distinct notices, sorted by issue date, with
+title, plain-text content, dates, unread and reply status. Its numeric state is
+the total fetched notice count; use the card below to read the actual content.
+
+Add a **Manual** card to a dashboard and use
+[examples/notices-card.yaml](examples/notices-card.yaml). It automatically
+finds all children from this integration, expands the latest notice and lets
+you expand older notices. No additional frontend integration is required.
+Reading or expanding a notice never changes its HKTE read/reply status.
+
+Each body is limited to 20,000 characters, with `content_truncated` indicating
+truncation. A missing body is explicitly shown as unavailable; attachment-only
+notices must still be read in the official app. HTML is converted to plain text
+with paragraph breaks; scripts and embedded media are removed. The supplied
+card escapes provider content and never loads embedded links or images.
 
 ## New-item automations
 
@@ -89,6 +110,12 @@ storage. This storage is access-controlled by the Home Assistant host but is
 not separately encrypted. Protect `.storage`, backups and host administrator
 access. Session cookies remain in memory and are not written by this
 integration.
+
+Notice text is visible to users and clients with access to Home Assistant
+entity states. The `notices` attribute is excluded from Recorder history by
+this integration, but external clients and user-created automations can still
+copy it. Do not share screenshots or state exports containing private notices.
+Bodies are never added to new-item events, diagnostics or the seen-ID store.
 
 Diagnostics contain only record counts and timing information. Logs never
 include credentials, cookies, raw provider responses, child names, school names

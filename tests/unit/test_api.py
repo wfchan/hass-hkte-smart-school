@@ -54,6 +54,7 @@ async def test_client_uses_multipart_cookies_and_pagination(
                         "title": f"Notice {item_id}",
                         "unread": 1,
                         "replied": 0,
+                        "body": "<p>Notice body</p><p>Second paragraph</p>",
                     }
                     for item_id in range(100, 50, -1)
                 ]
@@ -97,6 +98,7 @@ async def test_client_uses_multipart_cookies_and_pagination(
     assert snapshot.account_id == "9"
     assert len(snapshot.children) == 1
     assert len(snapshot.children[0].notices) == 51
+    assert snapshot.children[0].notices[0].content == "Notice body\nSecond paragraph"
     assert len(snapshot.children[0].messages) == 41
     assert snapshot.children[0].homeworks[0].deadline == date(2026, 9, 20)
     assert snapshot.children[0].homeworks[0].submitted is False
@@ -183,3 +185,29 @@ def test_missing_provider_id_is_stable_when_order_changes():
     item = {"title": "Example", "created_at": 1700000000, "unread": 1}
     assert api._normalize_message(item, 0).id == api._normalize_message(item, 1).id
     assert api._normalize_message(item, 0).id == api._normalize_message(dict(item, unread=0), 0).id
+
+
+@pytest.mark.parametrize(
+    ("fields", "expected"),
+    [
+        ({}, ""),
+        ({"body": {"invalid": "object"}}, ""),
+        ({"introduction": "Fallback text"}, "Fallback text"),
+        ({"body": "First\nSecond"}, "First\nSecond"),
+        ({"body": "<p>A &amp; B</p><div>Next<br>line</div>"}, "A & B\nNext\nline"),
+        ({"body": '<script>secret()</script><style>bad</style><p>Safe</p>'}, "Safe"),
+        ({"body": '<img src="https://example.test/track"><a href="/token">Link</a>'}, "Link"),
+        ({"body": '<iframe>private</iframe><svg><text>hidden</text></svg>Visible'}, "Visible"),
+    ],
+)
+def test_notice_content_normalization(fields, expected):
+    notice = api._normalize_notice({"nid": 1, **fields}, 0)
+    assert notice.content == expected
+    assert notice.content_truncated is False
+
+
+def test_notice_content_is_bounded_and_does_not_change_identity():
+    notice = api._normalize_notice({"nid": 1, "body": "x" * 20001}, 0)
+    assert len(notice.content) == 20000
+    assert notice.content_truncated is True
+    assert notice.id == api._normalize_notice({"nid": 1, "body": "changed"}, 0).id

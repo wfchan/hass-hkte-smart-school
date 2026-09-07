@@ -18,6 +18,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import HkteConfigEntry
+from .const import NOTICE_DISPLAY_LIMIT
 from .coordinator import HkteDataUpdateCoordinator
 from .entity import HkteChildEntity
 from .models import ChildSnapshot
@@ -113,6 +114,7 @@ async def async_setup_entry(
             for child in new_children
             for description in SENSOR_DESCRIPTIONS
         )
+        async_add_entities(HkteNoticeContentSensor(coordinator, child) for child in new_children)
 
     async_add_new_children()
     entry.async_on_unload(coordinator.async_add_listener(async_add_new_children))
@@ -137,6 +139,51 @@ class HkteSensor(HkteChildEntity, SensorEntity):
         """Return the calculated sensor value."""
         child = self.child
         return self.entity_description.value_fn(child) if child else None
+
+
+class HkteNoticeContentSensor(HkteChildEntity, SensorEntity):
+    """Expose a bounded notice feed for native Markdown dashboard cards."""
+
+    _attr_translation_key = "notice_content"
+    _attr_icon = "mdi:email-open-outline"
+    _unrecorded_attributes = frozenset({"notices"})
+
+    def __init__(
+        self, coordinator: HkteDataUpdateCoordinator, child: ChildSnapshot
+    ) -> None:
+        super().__init__(coordinator, child, "notice_content")
+
+    @property
+    def native_value(self) -> int:
+        """Keep notice titles and bodies out of the recorded entity state."""
+        return len(self.child.notices) if self.child else 0
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        child = self.child
+        unique = {item.id: item for item in child.notices} if child else {}
+        notices = sorted(
+            unique.values(),
+            key=lambda item: item.issued_at.timestamp() if item.issued_at else float("-inf"),
+            reverse=True,
+        )
+        return {
+            "notices": [
+                {
+                    "id": item.id,
+                    "title": item.title,
+                    "content": item.content,
+                    "content_truncated": item.content_truncated,
+                    "issued_at": item.issued_at.isoformat() if item.issued_at else None,
+                    "deadline": item.deadline.isoformat() if item.deadline else None,
+                    "unread": item.unread,
+                    "replied": item.replied,
+                }
+                for item in notices[:NOTICE_DISPLAY_LIMIT]
+            ],
+            "displayed_count": min(len(notices), NOTICE_DISPLAY_LIMIT),
+            "has_more": len(notices) > NOTICE_DISPLAY_LIMIT,
+        }
 
 
 def _next_homework_deadline(child: ChildSnapshot) -> datetime | None:

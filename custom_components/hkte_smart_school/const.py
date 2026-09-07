@@ -21,5 +21,7 @@ MAX_PAGES: Final = 200
 NOTICE_PAGE_SIZE: Final = 50
 MESSAGE_PAGE_SIZE: Final = 40
 SEEN_IDS_PER_KIND: Final = 20000
+NOTICE_CONTENT_LIMIT: Final = 20000
+NOTICE_DISPLAY_LIMIT: Final = 20
 
 PLATFORMS: Final = ("sensor", "calendar", "event")

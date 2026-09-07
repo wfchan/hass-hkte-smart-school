@@ -42,6 +42,7 @@ def snapshot() -> AccountSnapshot:
                         deadline=date(2026, 9, 15),
                         unread=True,
                         replied=False,
+                        content="Private fixture notice body.\nSecond paragraph.",
                     ),
                 ),
                 messages=(

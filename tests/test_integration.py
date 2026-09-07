@@ -33,17 +33,27 @@ async def test_setup_creates_expected_entities(hass, snapshot):
     entities = [
         item for item in registry.entities.values() if item.config_entry_id == entry.entry_id
     ]
-    assert len(entities) == 10
-    assert sum(item.domain == "sensor" for item in entities) == 7
+    assert len(entities) == 11
+    assert sum(item.domain == "sensor" for item in entities) == 8
     assert sum(item.domain == "calendar" for item in entities) == 2
     assert sum(item.domain == "event" for item in entities) == 1
 
     values = [
         hass.states.get(item.entity_id).state
         for item in entities
-        if item.domain == "sensor" and not item.unique_id.endswith("deadline")
+        if item.domain == "sensor"
+        and not item.unique_id.endswith(("deadline", "notice_content"))
     ]
     assert sorted(values) == ["1", "1", "1", "1", "1", "2"]
+
+    content_entity = next(item for item in entities if item.unique_id.endswith("notice_content"))
+    content_state = hass.states.get(content_entity.entity_id)
+    assert content_state.state == "1"
+    assert (
+        content_state.attributes["notices"][0]["content"]
+        == snapshot.children[0].notices[0].content
+    )
+    assert content_state.attributes["has_more"] is False
 
     calendar_entity = next(
         item.entity_id
@@ -93,6 +103,7 @@ async def test_diagnostics_exclude_sensitive_fields(hass, snapshot):
     assert "private-login" not in rendered
     assert "private-password" not in rendered
     assert "Test child" not in rendered
+    assert snapshot.children[0].notices[0].content not in rendered
     assert diagnostics["child_count"] == 1
     assert diagnostics["record_counts"] == [{"notices": 1, "messages": 1, "homeworks": 2}]
 
@@ -134,6 +145,7 @@ async def test_refresh_emits_only_the_new_item(hass, snapshot):
                             deadline=None,
                             unread=True,
                             replied=False,
+                            content="Private new notice body",
                         ),
                         *child.notices,
                     ),
@@ -149,5 +161,6 @@ async def test_refresh_emits_only_the_new_item(hass, snapshot):
         assert state.attributes["event_type"] == "notice"
         assert state.attributes["item_id"] == "notice-2"
         assert state.attributes["title"] == "New notice"
+        assert "Private new notice body" not in str(state.attributes)
 
     await hass.config_entries.async_unload(entry.entry_id)

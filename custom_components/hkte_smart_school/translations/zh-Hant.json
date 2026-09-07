@@ -46,6 +46,14 @@
   },
   "entity": {
     "sensor": {
+      "notice_content": {
+        "name": "通告內容",
+        "state_attributes": {
+          "notices": { "name": "通告" },
+          "displayed_count": { "name": "已顯示通告" },
+          "has_more": { "name": "尚有其他通告" }
+        }
+      },
       "unread_notices": { "name": "未讀通告" },
       "unreplied_notices": { "name": "未回覆通告" },
       "unread_messages": { "name": "未讀訊息" },

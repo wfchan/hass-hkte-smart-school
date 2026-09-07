@@ -10,6 +10,7 @@ import logging
 import re
 from collections.abc import Mapping
 from datetime import date, datetime
+from html.parser import HTMLParser
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -21,6 +22,7 @@ from .const import (
     BASE_URL,
     MAX_PAGES,
     MESSAGE_PAGE_SIZE,
+    NOTICE_CONTENT_LIMIT,
     NOTICE_PAGE_SIZE,
     REQUEST_TIMEOUT_SECONDS,
 )
@@ -375,6 +377,7 @@ def _stable_id(item: Mapping[str, Any], kind: str, *keys: str) -> str:
 
 
 def _normalize_notice(item: Mapping[str, Any], index: int) -> Notice:
+    content = _notice_content(_first(item, "body", "introduction"))
     return Notice(
         id=_stable_id(item, "notice", "nid", "id"),
         title=_clean_text(_first(item, "title", "name"), 220) or "Untitled notice",
@@ -382,6 +385,48 @@ def _normalize_notice(item: Mapping[str, Any], index: int) -> Notice:
         deadline=_as_date_value(item.get("deadline")),
         unread=_as_bool(item.get("unread")),
         replied=_as_bool(item.get("replied")),
+        content=content[:NOTICE_CONTENT_LIMIT],
+        content_truncated=len(content) > NOTICE_CONTENT_LIMIT,
+    )
+
+
+class _NoticeTextParser(HTMLParser):
+    """Keep readable paragraphs without scripts, embedded media or remote URLs."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.parts: list[str] = []
+        self.hidden: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag in {"script", "style", "iframe", "object", "svg", "template"}:
+            self.hidden.append(tag)
+        if not self.hidden and tag in {"p", "div", "br", "li", "tr", "h1", "h2", "h3"}:
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        if self.hidden:
+            if tag == self.hidden[-1]:
+                self.hidden.pop()
+            return
+        if tag in {"p", "div", "li", "tr", "h1", "h2", "h3"}:
+            self.parts.append("\n")
+        elif tag in {"td", "th"}:
+            self.parts.append(" ")
+
+    def handle_data(self, data: str) -> None:
+        if not self.hidden:
+            self.parts.append(data)
+
+
+def _notice_content(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    parser = _NoticeTextParser()
+    parser.feed(value)
+    parser.close()
+    return "\n".join(
+        line for raw in "".join(parser.parts).splitlines() if (line := " ".join(raw.split()))
     )
 
 

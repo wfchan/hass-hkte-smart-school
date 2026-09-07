@@ -1,0 +1,28 @@
+type: markdown
+title: HKTE 通告
+content: |
+  {% set ns = namespace(found=false) %}
+  {% for entity in integration_entities('hkte_smart_school') | sort %}
+    {% if state_attr(entity, 'notices') is not none %}
+      {% set ns.found = true %}
+  <h2>{{ state_attr(entity, 'friendly_name') | e }}</h2>
+      {% for notice in state_attr(entity, 'notices') %}
+  <details {{ 'open' if loop.first else '' }}>
+  <summary><b>{{ notice.title | e }}</b>{{ ' · 未讀' if notice.unread == true else '' }}</summary>
+  <p>發出：{{ (notice.issued_at or '未提供') | e }}<br>截止：{{ (notice.deadline or '未提供') | e }}</p>
+  <pre style="white-space: pre-wrap; overflow-wrap: anywhere;">{{ (notice.content or '此通告未提供文字正文，請在 HKTE App 查看附件。') | e }}</pre>
+      {% if notice.content_truncated %}
+  <p>正文超過顯示上限，請在 HKTE App 查看完整內容。</p>
+      {% endif %}
+  </details>
+      {% else %}
+  <p>暫無通告。</p>
+      {% endfor %}
+      {% if state_attr(entity, 'has_more') %}
+  <p>顯示最近 20 份通告。</p>
+      {% endif %}
+    {% endif %}
+  {% endfor %}
+  {% if not ns.found %}
+  <p>尚未載入通告內容或暫時無法更新。</p>
+  {% endif %}
