@@ -1,0 +1,75 @@
+{
+  "title": "HKTE Smart School",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to HKTE Smart School",
+        "description": "Enter the credentials you use in the HKTE Smart School parent app.",
+        "data": {
+          "login_name": "Login name",
+          "password": "Password"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reconnect to HKTE Smart School",
+        "description": "Update the account credentials.",
+        "data": {
+          "login_name": "Login name",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to HKTE Smart School",
+      "invalid_auth": "Invalid login name or password",
+      "invalid_response": "HKTE Smart School returned an unsupported response"
+    },
+    "abort": {
+      "reauth_successful": "Reauthentication was successful",
+      "already_configured": "This account is already configured",
+      "single_instance_allowed": "Only one HKTE Smart School account is supported",
+      "wrong_account": "The new credentials belong to a different account"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "HKTE Smart School options",
+        "data": {
+          "update_interval": "Update interval"
+        },
+        "data_description": {
+          "update_interval": "Minutes between updates (5-60)"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "unread_notices": { "name": "Unread notices" },
+      "unreplied_notices": { "name": "Unreplied notices" },
+      "unread_messages": { "name": "Unread messages" },
+      "unsubmitted_homeworks": { "name": "Unsubmitted homework" },
+      "overdue_homeworks": { "name": "Overdue homework" },
+      "urgent_homeworks": { "name": "Urgent homework" },
+      "next_homework_deadline": { "name": "Next homework deadline" }
+    },
+    "calendar": {
+      "homework_deadlines": { "name": "Homework deadlines" },
+      "notice_deadlines": { "name": "Notice deadlines" }
+    },
+    "event": {
+      "new_item": {
+        "name": "New item",
+        "state_attributes": {
+          "event_type": { "name": "Type" },
+          "child_id": { "name": "Child ID" },
+          "item_id": { "name": "Item ID" },
+          "title": { "name": "Title" },
+          "occurred_at": { "name": "Occurred at" },
+          "deadline": { "name": "Deadline" }
+        }
+      }
+    }
+  }
+}

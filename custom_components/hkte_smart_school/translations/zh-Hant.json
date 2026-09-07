@@ -1,0 +1,75 @@
+{
+  "title": "HKTE 智能校園",
+  "config": {
+    "step": {
+      "user": {
+        "title": "連接 HKTE 智能校園",
+        "description": "輸入你在 HKTE Smart School 家長應用程式使用的登入資料。",
+        "data": {
+          "login_name": "登入名稱",
+          "password": "密碼"
+        }
+      },
+      "reauth_confirm": {
+        "title": "重新連接 HKTE 智能校園",
+        "description": "更新帳戶登入資料。",
+        "data": {
+          "login_name": "登入名稱",
+          "password": "密碼"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "無法連接 HKTE 智能校園",
+      "invalid_auth": "登入名稱或密碼不正確",
+      "invalid_response": "HKTE 智能校園回傳了不支援的資料格式"
+    },
+    "abort": {
+      "reauth_successful": "重新驗證成功",
+      "already_configured": "此帳戶已設定",
+      "single_instance_allowed": "只支援一個 HKTE 智能校園帳戶",
+      "wrong_account": "新的登入資料屬於另一個帳戶"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "HKTE 智能校園選項",
+        "data": {
+          "update_interval": "更新間隔"
+        },
+        "data_description": {
+          "update_interval": "兩次更新之間的分鐘數（5 至 60）"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "unread_notices": { "name": "未讀通告" },
+      "unreplied_notices": { "name": "未回覆通告" },
+      "unread_messages": { "name": "未讀訊息" },
+      "unsubmitted_homeworks": { "name": "未提交功課" },
+      "overdue_homeworks": { "name": "逾期功課" },
+      "urgent_homeworks": { "name": "緊急功課" },
+      "next_homework_deadline": { "name": "下一份功課截止時間" }
+    },
+    "calendar": {
+      "homework_deadlines": { "name": "功課截止日期" },
+      "notice_deadlines": { "name": "通告截止日期" }
+    },
+    "event": {
+      "new_item": {
+        "name": "新項目",
+        "state_attributes": {
+          "event_type": { "name": "類型" },
+          "child_id": { "name": "子女 ID" },
+          "item_id": { "name": "項目 ID" },
+          "title": { "name": "標題" },
+          "occurred_at": { "name": "發出時間" },
+          "deadline": { "name": "截止時間" }
+        }
+      }
+    }
+  }
+}
