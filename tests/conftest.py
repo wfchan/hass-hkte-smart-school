@@ -13,7 +13,6 @@ from custom_components.hkte_smart_school.models import (
     Homework,
     Message,
     Notice,
-    NoticeAttachment,
 )
 
 
@@ -44,14 +43,6 @@ def snapshot() -> AccountSnapshot:
                         unread=True,
                         replied=False,
                         content="Private fixture notice body.\nSecond paragraph.",
-                        attachments=(
-                            NoticeAttachment(
-                                id="attachment-1",
-                                filename="notice.pdf",
-                                mime_type="application/pdf",
-                                size=128,
-                            ),
-                        ),
                     ),
                 ),
                 messages=(

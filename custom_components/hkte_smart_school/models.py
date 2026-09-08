@@ -9,16 +9,6 @@ DateValue = date | datetime
 
 
 @dataclass(frozen=True, slots=True)
-class NoticeAttachment:
-    """Display-safe metadata for a notice attachment."""
-
-    id: str
-    filename: str
-    mime_type: str
-    size: int | None = None
-
-
-@dataclass(frozen=True, slots=True)
 class AccountIdentity:
     """Stable, non-display identity returned after authentication."""
 
@@ -37,7 +27,6 @@ class Notice:
     replied: bool | None
     content: str = ""
     content_truncated: bool = False
-    attachments: tuple[NoticeAttachment, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

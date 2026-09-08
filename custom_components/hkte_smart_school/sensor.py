@@ -180,15 +180,6 @@ class HkteNoticeContentSensor(HkteChildEntity, SensorEntity):
                     "deadline": item.deadline.isoformat() if item.deadline else None,
                     "unread": item.unread,
                     "replied": item.replied,
-                    "attachments": [
-                        {
-                            "id": attachment.id,
-                            "filename": attachment.filename,
-                            "mime_type": attachment.mime_type,
-                            "size": attachment.size,
-                        }
-                        for attachment in item.attachments
-                    ],
                 }
                 for item in notices[:NOTICE_DISPLAY_LIMIT]
             ],

@@ -54,9 +54,7 @@ async def test_setup_creates_expected_entities(hass, snapshot):
         == snapshot.children[0].notices[0].content
     )
     assert content_state.attributes["has_more"] is False
-    attachment = content_state.attributes["notices"][0]["attachments"][0]
-    assert attachment["filename"] == "notice.pdf"
-    assert set(attachment) == {"id", "filename", "mime_type", "size"}
+    assert "attachments" not in content_state.attributes["notices"][0]
 
     calendar_entity = next(
         item.entity_id

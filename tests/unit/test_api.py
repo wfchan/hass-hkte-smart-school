@@ -66,22 +66,6 @@ async def test_client_uses_multipart_cookies_and_pagination(
                 else [{"nid": 50, "title": "Last notice", "unread": 0, "replied": 1}]
             )
             return web.json_response({"success": True, "data": {"data": items}})
-        if method == "GetNoticeData":
-            return web.json_response(
-                {
-                    "success": True,
-                    "data": {
-                        "nid": payload["nid"],
-                        "attachments": [
-                            {
-                                "itemId": "file-1",
-                                "name": "notice.pdf",
-                                "type": "application/pdf",
-                            }
-                        ],
-                    },
-                }
-            )
         if method == "GetMessageList":
             items = (
                 [{"mid": f"m{index}", "subject": "Message"} for index in range(40)]
@@ -119,7 +103,6 @@ async def test_client_uses_multipart_cookies_and_pagination(
     assert len(snapshot.children) == 1
     assert len(snapshot.children[0].notices) == 51
     assert snapshot.children[0].notices[0].content == "附件"
-    assert snapshot.children[0].notices[0].attachments[0].id == "file-1"
     assert len(snapshot.children[0].messages) == 41
     assert snapshot.children[0].homeworks[0].deadline == date(2026, 9, 20)
     assert snapshot.children[0].homeworks[0].submitted is False
@@ -234,17 +217,9 @@ def test_notice_content_is_bounded_and_does_not_change_identity():
     assert notice.id == api._normalize_notice({"nid": 1, "body": "changed"}, 0).id
 
 
-def test_notice_detail_enrichment_only_for_attachment_hint():
-    assert api._notice_needs_detail({"body": "附件可供下載"}) is True
-    assert api._notice_needs_detail({"body": "一般通知"}) is False
-
-
-def test_notice_detail_and_attachment_aliases_are_normalized():
-    detail = api._extract_detail({"data": [{"nid": 7, "files": {"itemid": "f-7"}}]})
-    assert detail == {"nid": 7, "files": {"itemid": "f-7"}}
+def test_notice_normalization_ignores_provider_attachment_fields():
     notice = api._normalize_notice(
         {"nid": 7, "title": "Notice", "attachment": {"itemid": "f-7", "name": "a.pdf"}},
         0,
     )
-    assert notice.attachments[0].id == "f-7"
-    assert notice.attachments[0].filename == "a.pdf"
+    assert notice.title == "Notice"
