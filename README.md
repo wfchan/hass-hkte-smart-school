@@ -43,7 +43,7 @@ options.
 
 ## Read notice content
 
-Version 0.3.0 adds a **Notice content** sensor for every child. Its `notices`
+Version 0.3.1 adds a **Notice content** sensor for every child. Its `notices`
 attribute contains the newest 20 distinct notices, sorted by issue date, with
 title, plain-text content, dates, unread and reply status. Its numeric state is
 the total fetched notice count; use the card below to read the actual content.

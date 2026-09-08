@@ -255,6 +255,7 @@ class HkteClient:
                 {"user_id": user_id, "start": start, "limit": NOTICE_PAGE_SIZE},
             )
             items = _extract_items(response.get("data"))
+            items = await self._async_enrich_notice_details(items)
             merged.extend(items)
             if len(items) < NOTICE_PAGE_SIZE:
                 break
@@ -268,6 +269,30 @@ class HkteClient:
         else:
             _LOGGER.warning("HKTE notice pagination reached the safety limit")
         return merged
+
+    async def _async_enrich_notice_details(
+        self, items: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Read attachment metadata only for notices advertising attachments."""
+        enriched: list[dict[str, Any]] = []
+        for item in items:
+            if item.get("attachments") or not _notice_needs_detail(item):
+                enriched.append(item)
+                continue
+            notice_id = _first(item, "nid", "id")
+            if notice_id is None:
+                enriched.append(item)
+                continue
+            try:
+                detail = await self._async_call("GetNoticeData", {"nid": notice_id})
+                detail_data = _extract_detail(detail.get("data"))
+            except HkteResponseError:
+                detail_data = None
+            if detail_data:
+                enriched.append({**item, **detail_data})
+            else:
+                enriched.append(item)
+        return enriched
 
     async def _async_messages(self, user_id: Any) -> list[dict[str, Any]]:
         merged: list[dict[str, Any]] = []
@@ -499,6 +524,27 @@ def _normalize_attachment(
         size=size,
         source_url=_clean_text(_first(item, "url", "source_url"), 500),
     )
+
+
+def _notice_needs_detail(item: Mapping[str, Any]) -> bool:
+    """Identify the provider's attachment-only notice summaries."""
+    if item.get("download_right") or item.get("downloadRight"):
+        return True
+    text = str(_first(item, "body", "introduction") or "").casefold()
+    return "附件" in text or "attachment" in text
+
+
+def _extract_detail(payload: Any) -> dict[str, Any] | None:
+    """Extract a single detail object from known response envelopes."""
+    if isinstance(payload, Mapping):
+        for key in ("data", "item", "notice"):
+            nested = payload.get(key)
+            if isinstance(nested, Mapping):
+                return dict(nested)
+        return dict(payload)
+    if isinstance(payload, list) and payload and isinstance(payload[0], Mapping):
+        return dict(payload[0])
+    return None
 
 
 def _filedownload_url(source_url: str, attachment_id: str, sid: str) -> str:

@@ -54,7 +54,11 @@ async def test_client_uses_multipart_cookies_and_pagination(
                         "title": f"Notice {item_id}",
                         "unread": 1,
                         "replied": 0,
-                        "body": "<p>Notice body</p><p>Second paragraph</p>",
+                        "body": (
+                            "附件"
+                            if item_id == 100
+                            else "<p>Notice body</p><p>Second paragraph</p>"
+                        ),
                     }
                     for item_id in range(100, 50, -1)
                 ]
@@ -62,6 +66,22 @@ async def test_client_uses_multipart_cookies_and_pagination(
                 else [{"nid": 50, "title": "Last notice", "unread": 0, "replied": 1}]
             )
             return web.json_response({"success": True, "data": {"data": items}})
+        if method == "GetNoticeData":
+            return web.json_response(
+                {
+                    "success": True,
+                    "data": {
+                        "nid": payload["nid"],
+                        "attachments": [
+                            {
+                                "itemId": "file-1",
+                                "name": "notice.pdf",
+                                "type": "application/pdf",
+                            }
+                        ],
+                    },
+                }
+            )
         if method == "GetMessageList":
             items = (
                 [{"mid": f"m{index}", "subject": "Message"} for index in range(40)]
@@ -98,7 +118,8 @@ async def test_client_uses_multipart_cookies_and_pagination(
     assert snapshot.account_id == "9"
     assert len(snapshot.children) == 1
     assert len(snapshot.children[0].notices) == 51
-    assert snapshot.children[0].notices[0].content == "Notice body\nSecond paragraph"
+    assert snapshot.children[0].notices[0].content == "附件"
+    assert snapshot.children[0].notices[0].attachments[0].id == "file-1"
     assert len(snapshot.children[0].messages) == 41
     assert snapshot.children[0].homeworks[0].deadline == date(2026, 9, 20)
     assert snapshot.children[0].homeworks[0].submitted is False
@@ -264,3 +285,8 @@ def test_filedownload_url_replaces_provider_query_without_leaking_invalid_hosts(
     assert api._filedownload_url("https://evil.example/filedownload", "file-1", "sid-1").startswith(
         "https://cls.hkteducation.com/cloud/filedownload?itemid=file-1&sid=sid-1"
     )
+
+
+def test_notice_detail_enrichment_only_for_attachment_hint():
+    assert api._notice_needs_detail({"body": "附件可供下載"}) is True
+    assert api._notice_needs_detail({"body": "一般通知"}) is False
