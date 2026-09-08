@@ -12,7 +12,7 @@ content: |
   <p>發出：{{ (notice.issued_at or '未提供') | e }}<br>截止：{{ (notice.deadline or '未提供') | e }}</p>
   <pre style="white-space: pre-wrap; overflow-wrap: anywhere;">{{ (notice.content or '此通告未提供文字正文，請在 HKTE App 查看附件。') | e }}</pre>
       {% for attachment in notice.attachments %}
-  <p><a href="{{ attachment.download_url }}">下載附件：{{ attachment.filename | e }}</a>{% if attachment.size %}（{{ attachment.size }} bytes）{% endif %}</p>
+  <p>附件：{{ attachment.filename | e }}（{{ attachment.mime_type | e }}{% if attachment.size %}，{{ attachment.size }} bytes{% endif %}）</p>
       {% endfor %}
       {% if notice.content_truncated %}
   <p>正文超過顯示上限，請在 HKTE App 查看完整內容。</p>

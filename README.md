@@ -26,7 +26,7 @@ summary sensors, deadline calendars and a new-item event entity.
 The integration never marks an item as read, signs a notice, submits homework,
 makes a payment or calls another state-changing endpoint. Notice text comes
 from the existing `GetAllNotices` response, without any additional requests.
-Attachments are not downloaded or displayed.
+Attachment files are never downloaded; only safe metadata may be displayed.
 
 ## Install with HACS
 
@@ -43,30 +43,30 @@ options.
 
 ## Read notice content
 
-Version 0.3.3 adds a **Notice content** sensor for every child. Its `notices`
+Version 0.3.4 provides a **Notice content** sensor for every child. Its `notices`
 attribute contains the newest 20 distinct notices, sorted by issue date, with
 title, plain-text content, dates, unread and reply status. Its numeric state is
-the total fetched notice count; use the card below to read the actual content.
+the total fetched notice count; use the HACS card below to read the actual content.
 
-Add a **Manual** card to a dashboard and use
+For the recommended dashboard experience, add
+`https://github.com/wfchan/hass-hkte-smart-school-card` to HACS as a
+**Plugin**, install **HKTE Smart School Notices Card**, and add the generated
+resource. Add `custom:hkte-notices-card` to a dashboard; it discovers every
+child's notice-content sensor automatically, or accepts an explicit `entities`
+list. It supports all/unread filtering, expandable bodies and attachment
+metadata. It never downloads attachments.
+
+As a dependency-free fallback, add a **Manual** card using
 [examples/notices-card.yaml](examples/notices-card.yaml). It automatically
-finds all children from this integration, expands the latest notice and lets
-you expand older notices. No additional frontend integration is required.
+finds all children and expands the latest notice.
 Reading or expanding a notice never changes its HKTE read/reply status.
 
 Each body is limited to 20,000 characters, with `content_truncated` indicating
-truncation. A missing body is explicitly shown as unavailable. Attachments can
-be downloaded from the supplied card through a Home Assistant-authenticated
-local URL. The integration first obtains the short-lived `uHubSid` token and
-then requests `filedownload?itemid=...&sid=...`; the token, cookie and bytes
-remain in memory. HTML is converted to plain text with paragraph breaks;
+truncation. A missing body is explicitly shown as unavailable. Attachment files
+are not downloaded by the integration or the supplied card. HTML is converted
+to plain text with paragraph breaks;
 scripts and embedded media are removed. The supplied card escapes provider
 content and never loads embedded links or images.
-
-Attachment downloads are limited to 25 MiB. The response preserves the provider
-filename and MIME type and is not stored by the integration. The local download
-URL is only exposed in live entity state and requires an authenticated Home
-Assistant session.
 
 ## New-item automations
 

@@ -186,48 +186,6 @@ async def test_expired_session_reauthenticates_once(aiohttp_server, monkeypatch,
     assert children_count == 2
 
 
-@pytest.mark.asyncio
-async def test_attachment_download_uses_uhub_sid_and_filedownload(
-    aiohttp_server, monkeypatch, socket_enabled
-):
-    calls: list[tuple[str, dict[str, str]]] = []
-
-    async def handler(request: web.Request) -> web.Response:
-        method = request.match_info["method"]
-        if method == "Login":
-            await request.read()
-            return web.json_response({"success": True, "data": {"user_id": 9}})
-        if method == "uHubSid":
-            reader = await request.multipart()
-            field = await reader.next()
-            assert field is not None
-            payload = json.loads(await field.text())
-            calls.append((method, payload))
-            return web.json_response({"success": True, "data": {"sid": "short-lived"}})
-        raise AssertionError(method)
-
-    async def download(request: web.Request) -> web.Response:
-        assert request.query == {"itemid": "attachment-7", "sid": "short-lived"}
-        return web.Response(body=b"%PDF-fake", content_type="application/pdf")
-
-    app = web.Application()
-    app.router.add_post("/api/parent3.php/{method}", handler)
-    app.router.add_get("/cloud/filedownload", download)
-    server = await aiohttp_server(app)
-    monkeypatch.setattr(api, "BASE_URL", str(server.make_url("/")).rstrip("/"))
-
-    async with ClientSession() as session:
-        client = HkteClient(session, "parent", "secret")
-        result = await client.async_download_attachment(
-            "42", "attachment-7", "通知.pdf", "application/pdf"
-        )
-
-    assert result.content == b"%PDF-fake"
-    assert result.filename == "通知.pdf"
-    assert result.mime_type == "application/pdf"
-    assert calls == [("uHubSid", {"user_id": "42"})]
-
-
 def test_normalizers_tolerate_dates_booleans_and_invalid_values():
     assert api._as_date_value("2026-09-08") == date(2026, 9, 8)
     assert isinstance(api._as_date_value(1_700_000_000), datetime)
@@ -274,17 +232,6 @@ def test_notice_content_is_bounded_and_does_not_change_identity():
     assert len(notice.content) == 20000
     assert notice.content_truncated is True
     assert notice.id == api._normalize_notice({"nid": 1, "body": "changed"}, 0).id
-
-
-def test_filedownload_url_replaces_provider_query_without_leaking_invalid_hosts():
-    assert api._filedownload_url(
-        "https://storage.hkteducation.com/cloud/filedownload?channel=web&path=/old",
-        "file-1",
-        "sid-1",
-    ) == "https://storage.hkteducation.com/cloud/filedownload?channel=web&path=%2Fold&itemid=file-1&sid=sid-1"
-    assert api._filedownload_url("https://evil.example/filedownload", "file-1", "sid-1").startswith(
-        "https://cls.hkteducation.com/cloud/filedownload?itemid=file-1&sid=sid-1"
-    )
 
 
 def test_notice_detail_enrichment_only_for_attachment_hint():

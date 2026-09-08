@@ -10,13 +10,12 @@ DateValue = date | datetime
 
 @dataclass(frozen=True, slots=True)
 class NoticeAttachment:
-    """Metadata for an attachment that can be downloaded read-only."""
+    """Display-safe metadata for a notice attachment."""
 
     id: str
     filename: str
     mime_type: str
     size: int | None = None
-    source_url: str = ""
 
 
 @dataclass(frozen=True, slots=True)
