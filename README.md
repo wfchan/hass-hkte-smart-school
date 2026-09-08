@@ -43,7 +43,7 @@ options.
 
 ## Read notice content
 
-Version 0.2.0 adds a **Notice content** sensor for every child. Its `notices`
+Version 0.3.0 adds a **Notice content** sensor for every child. Its `notices`
 attribute contains the newest 20 distinct notices, sorted by issue date, with
 title, plain-text content, dates, unread and reply status. Its numeric state is
 the total fetched notice count; use the card below to read the actual content.
@@ -55,10 +55,18 @@ you expand older notices. No additional frontend integration is required.
 Reading or expanding a notice never changes its HKTE read/reply status.
 
 Each body is limited to 20,000 characters, with `content_truncated` indicating
-truncation. A missing body is explicitly shown as unavailable; attachment-only
-notices must still be read in the official app. HTML is converted to plain text
-with paragraph breaks; scripts and embedded media are removed. The supplied
-card escapes provider content and never loads embedded links or images.
+truncation. A missing body is explicitly shown as unavailable. Attachments can
+be downloaded from the supplied card through a Home Assistant-authenticated
+local URL. The integration first obtains the short-lived `uHubSid` token and
+then requests `filedownload?itemid=...&sid=...`; the token, cookie and bytes
+remain in memory. HTML is converted to plain text with paragraph breaks;
+scripts and embedded media are removed. The supplied card escapes provider
+content and never loads embedded links or images.
+
+Attachment downloads are limited to 25 MiB. The response preserves the provider
+filename and MIME type and is not stored by the integration. The local download
+URL is only exposed in live entity state and requires an authenticated Home
+Assistant session.
 
 ## New-item automations
 

@@ -6,6 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from typing import Any
+from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 from homeassistant.components.sensor import (
@@ -161,6 +162,8 @@ class HkteNoticeContentSensor(HkteChildEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         child = self.child
+        if child is None:
+            return {"notices": [], "displayed_count": 0, "has_more": False}
         unique = {item.id: item for item in child.notices} if child else {}
         notices = sorted(
             unique.values(),
@@ -178,6 +181,21 @@ class HkteNoticeContentSensor(HkteChildEntity, SensorEntity):
                     "deadline": item.deadline.isoformat() if item.deadline else None,
                     "unread": item.unread,
                     "replied": item.replied,
+                    "attachments": [
+                        {
+                            "id": attachment.id,
+                            "filename": attachment.filename,
+                            "mime_type": attachment.mime_type,
+                            "size": attachment.size,
+                            "download_url": (
+                                "/api/hkte_smart_school/attachments/"
+                                f"{quote(self.coordinator.entry_id, safe='')}/"
+                                f"{quote(child.id, safe='')}/{quote(item.id, safe='')}/"
+                                f"{quote(attachment.id, safe='')}"
+                            ),
+                        }
+                        for attachment in item.attachments
+                    ],
                 }
                 for item in notices[:NOTICE_DISPLAY_LIMIT]
             ],

@@ -9,9 +9,11 @@ import json
 import logging
 import re
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import date, datetime
 from html.parser import HTMLParser
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from zoneinfo import ZoneInfo
 
 from aiohttp import ClientError, ClientResponse, ClientSession, FormData
@@ -20,6 +22,7 @@ from .const import (
     API_PREFIX,
     APP_VERSION,
     BASE_URL,
+    MAX_ATTACHMENT_BYTES,
     MAX_PAGES,
     MESSAGE_PAGE_SIZE,
     NOTICE_CONTENT_LIMIT,
@@ -33,6 +36,7 @@ from .models import (
     Homework,
     Message,
     Notice,
+    NoticeAttachment,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -54,6 +58,15 @@ class HkteConnectionError(HkteError):
 
 class HkteResponseError(HkteError):
     """The remote endpoint returned an unusable response."""
+
+
+@dataclass(frozen=True, slots=True)
+class HkteDownloadedAttachment:
+    """Downloaded attachment bytes and safe response metadata."""
+
+    content: bytes
+    filename: str
+    mime_type: str
 
 
 class _SessionExpiredError(HkteError):
@@ -95,6 +108,76 @@ class HkteClient:
                 return await self._async_fetch_authenticated()
             except _SessionExpiredError as err:
                 raise HkteInvalidAuthError from err
+
+    async def async_download_attachment(
+        self,
+        child_id: str,
+        attachment_id: str,
+        filename: str,
+        mime_type: str,
+        source_url: str = "",
+    ) -> HkteDownloadedAttachment:
+        """Download one attachment through the provider's uHubSid flow."""
+        if not self._authenticated:
+            await self._async_login()
+        try:
+            sid_result = await self._async_call("uHubSid", {"user_id": child_id})
+            sid_data = sid_result.get("data")
+            sid = _clean_text(sid_data.get("sid"), 180) if isinstance(sid_data, Mapping) else ""
+            if not sid:
+                raise HkteResponseError("HKTE did not return a download session") from None
+            return await self._async_download_file(
+                attachment_id, sid, filename, mime_type, source_url
+            )
+        except _SessionExpiredError:
+            self._authenticated = False
+            await self._async_login()
+            sid_result = await self._async_call("uHubSid", {"user_id": child_id})
+            sid_data = sid_result.get("data")
+            sid = _clean_text(sid_data.get("sid"), 180) if isinstance(sid_data, Mapping) else ""
+            if not sid:
+                raise HkteResponseError("HKTE did not return a download session") from None
+            return await self._async_download_file(
+                attachment_id, sid, filename, mime_type, source_url
+            )
+
+    async def _async_download_file(
+        self,
+        attachment_id: str,
+        sid: str,
+        filename: str,
+        mime_type: str,
+        source_url: str,
+    ) -> HkteDownloadedAttachment:
+        """Fetch bytes without exposing the provider session token."""
+        try:
+            async with asyncio.timeout(REQUEST_TIMEOUT_SECONDS):
+                async with self._session.get(
+                    _filedownload_url(source_url, attachment_id, sid),
+                    allow_redirects=False,
+                ) as response:
+                    if response.status in {401, 403}:
+                        raise _SessionExpiredError
+                    if response.status >= 300:
+                        raise HkteConnectionError
+                    content_length = response.headers.get("Content-Length")
+                    if content_length and int(content_length) > MAX_ATTACHMENT_BYTES:
+                        raise HkteResponseError("HKTE attachment is too large")
+                    content = await response.content.read(MAX_ATTACHMENT_BYTES + 1)
+                    if len(content) > MAX_ATTACHMENT_BYTES:
+                        raise HkteResponseError("HKTE attachment is too large")
+                    if not content:
+                        raise HkteResponseError("HKTE returned an empty attachment")
+                    response_type = response.headers.get("Content-Type", "").split(";", 1)[0]
+                    return HkteDownloadedAttachment(
+                        content=content,
+                        filename=filename,
+                        mime_type=response_type or mime_type or "application/octet-stream",
+                    )
+        except HkteError:
+            raise
+        except (TimeoutError, ClientError, ValueError) as err:
+            raise HkteConnectionError from err
 
     async def _async_login(self) -> AccountIdentity:
         payload = {
@@ -387,7 +470,49 @@ def _normalize_notice(item: Mapping[str, Any], index: int) -> Notice:
         replied=_as_bool(item.get("replied")),
         content=content[:NOTICE_CONTENT_LIMIT],
         content_truncated=len(content) > NOTICE_CONTENT_LIMIT,
+        attachments=tuple(
+            attachment
+            for attachment_index, raw_attachment in enumerate(item.get("attachments", []))
+            if isinstance(raw_attachment, Mapping)
+            if (attachment := _normalize_attachment(raw_attachment, attachment_index)) is not None
+        ),
     )
+
+
+def _normalize_attachment(
+    item: Mapping[str, Any], index: int
+) -> NoticeAttachment | None:
+    """Normalize provider attachment metadata without exposing source URLs."""
+    attachment_id = _as_identifier(_first(item, "itemId", "itemid", "attachment_id", "id"))
+    if not attachment_id:
+        return None
+    filename = _clean_text(_first(item, "filename", "name", "title"), 240)
+    if not filename:
+        filename = f"HKTE attachment {index + 1}"
+    mime_type = _clean_text(_first(item, "mime_type", "mime", "content_type", "type"), 120)
+    size_value = item.get("size")
+    size = int(size_value) if isinstance(size_value, (int, float)) and size_value >= 0 else None
+    return NoticeAttachment(
+        id=attachment_id,
+        filename=filename,
+        mime_type=mime_type or "application/octet-stream",
+        size=size,
+        source_url=_clean_text(_first(item, "url", "source_url"), 500),
+    )
+
+
+def _filedownload_url(source_url: str, attachment_id: str, sid: str) -> str:
+    """Build the Android-compatible filedownload URL on HKTE storage."""
+    parsed = urlsplit(source_url)
+    hostname = (parsed.hostname or "").casefold()
+    if parsed.scheme != "https" or not (
+        hostname == "hkteducation.com" or hostname.endswith(".hkteducation.com")
+    ):
+        parsed = urlsplit(f"{BASE_URL}/cloud/filedownload")
+    path = parsed.path if "filedownload" in parsed.path else "/cloud/filedownload"
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    query.update({"itemid": attachment_id, "sid": sid})
+    return urlunsplit((parsed.scheme, parsed.netloc, path, urlencode(query), ""))
 
 
 class _NoticeTextParser(HTMLParser):

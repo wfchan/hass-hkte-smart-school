@@ -46,6 +46,7 @@ class HkteDataUpdateCoordinator(DataUpdateCoordinator[AccountSnapshot]):
             always_update=True,
         )
         self._client = client
+        self.entry_id = entry.entry_id
         self._store = Store[SeenMap](
             hass,
             _STORE_VERSION,
