@@ -56,7 +56,7 @@ async def test_setup_creates_expected_entities(hass, snapshot):
     assert content_state.attributes["has_more"] is False
     attachment = content_state.attributes["notices"][0]["attachments"][0]
     assert attachment["filename"] == "notice.pdf"
-    assert "/api/hkte_smart_school/attachments/" in attachment["download_url"]
+    assert "download_url" not in attachment
 
     calendar_entity = next(
         item.entity_id

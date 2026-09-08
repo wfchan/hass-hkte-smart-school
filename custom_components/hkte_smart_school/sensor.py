@@ -6,7 +6,6 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from typing import Any
-from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 from homeassistant.components.sensor import (
@@ -187,12 +186,6 @@ class HkteNoticeContentSensor(HkteChildEntity, SensorEntity):
                             "filename": attachment.filename,
                             "mime_type": attachment.mime_type,
                             "size": attachment.size,
-                            "download_url": (
-                                "/api/hkte_smart_school/attachments/"
-                                f"{quote(self.coordinator.entry_id, safe='')}/"
-                                f"{quote(child.id, safe='')}/{quote(item.id, safe='')}/"
-                                f"{quote(attachment.id, safe='')}"
-                            ),
                         }
                         for attachment in item.attachments
                     ],
