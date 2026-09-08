@@ -290,3 +290,14 @@ def test_filedownload_url_replaces_provider_query_without_leaking_invalid_hosts(
 def test_notice_detail_enrichment_only_for_attachment_hint():
     assert api._notice_needs_detail({"body": "附件可供下載"}) is True
     assert api._notice_needs_detail({"body": "一般通知"}) is False
+
+
+def test_notice_detail_and_attachment_aliases_are_normalized():
+    detail = api._extract_detail({"data": [{"nid": 7, "files": {"itemid": "f-7"}}]})
+    assert detail == {"nid": 7, "files": {"itemid": "f-7"}}
+    notice = api._normalize_notice(
+        {"nid": 7, "title": "Notice", "attachment": {"itemid": "f-7", "name": "a.pdf"}},
+        0,
+    )
+    assert notice.attachments[0].id == "f-7"
+    assert notice.attachments[0].filename == "a.pdf"

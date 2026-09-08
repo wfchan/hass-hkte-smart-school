@@ -497,8 +497,7 @@ def _normalize_notice(item: Mapping[str, Any], index: int) -> Notice:
         content_truncated=len(content) > NOTICE_CONTENT_LIMIT,
         attachments=tuple(
             attachment
-            for attachment_index, raw_attachment in enumerate(item.get("attachments", []))
-            if isinstance(raw_attachment, Mapping)
+            for attachment_index, raw_attachment in enumerate(_attachment_items(item))
             if (attachment := _normalize_attachment(raw_attachment, attachment_index)) is not None
         ),
     )
@@ -541,10 +540,22 @@ def _extract_detail(payload: Any) -> dict[str, Any] | None:
             nested = payload.get(key)
             if isinstance(nested, Mapping):
                 return dict(nested)
+            if isinstance(nested, list) and nested and isinstance(nested[0], Mapping):
+                return dict(nested[0])
         return dict(payload)
     if isinstance(payload, list) and payload and isinstance(payload[0], Mapping):
         return dict(payload[0])
     return None
+
+
+def _attachment_items(item: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    """Accept attachment collection names used by different HKTE app builds."""
+    raw = _first(item, "attachments", "attachment", "files", "file_list", "filelist")
+    if isinstance(raw, Mapping):
+        return [raw]
+    if isinstance(raw, list):
+        return [value for value in raw if isinstance(value, Mapping)]
+    return []
 
 
 def _filedownload_url(source_url: str, attachment_id: str, sid: str) -> str:
