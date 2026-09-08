@@ -3,6 +3,7 @@
   "name": "HKTE Smart School",
   "codeowners": ["@wfchan"],
   "config_flow": true,
+  "after_dependencies": ["http"],
   "documentation": "https://github.com/wfchan/hass-hkte-smart-school",
   "integration_type": "hub",
   "iot_class": "cloud_polling",
