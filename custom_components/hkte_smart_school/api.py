@@ -33,6 +33,7 @@ from .models import (
     Homework,
     Message,
     Notice,
+    NoticeAttachment,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -172,6 +173,7 @@ class HkteClient:
                 {"user_id": user_id, "start": start, "limit": NOTICE_PAGE_SIZE},
             )
             items = _extract_items(response.get("data"))
+            items = await self._async_enrich_notice_attachments(items)
             merged.extend(items)
             if len(items) < NOTICE_PAGE_SIZE:
                 break
@@ -185,6 +187,29 @@ class HkteClient:
         else:
             _LOGGER.warning("HKTE notice pagination reached the safety limit")
         return merged
+
+    async def _async_enrich_notice_attachments(
+        self, items: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Read display-safe attachment metadata, never attachment content."""
+        enriched: list[dict[str, Any]] = []
+        for item in items:
+            if _attachment_items(item) or not _notice_needs_attachment_metadata(item):
+                enriched.append(item)
+                continue
+            notice_id = _first(item, "nid", "id")
+            if notice_id is None:
+                enriched.append(item)
+                continue
+            try:
+                detail_data = _extract_detail(
+                    (await self._async_call("GetNoticeData", {"nid": notice_id})).get("data")
+                )
+            except HkteResponseError:
+                detail_data = None
+            attachments = _attachment_items(detail_data) if detail_data else []
+            enriched.append({**item, "attachments": attachments} if attachments else item)
+        return enriched
 
     async def _async_messages(self, user_id: Any) -> list[dict[str, Any]]:
         merged: list[dict[str, Any]] = []
@@ -387,7 +412,66 @@ def _normalize_notice(item: Mapping[str, Any], index: int) -> Notice:
         replied=_as_bool(item.get("replied")),
         content=content[:NOTICE_CONTENT_LIMIT],
         content_truncated=len(content) > NOTICE_CONTENT_LIMIT,
+        attachments=tuple(
+            attachment
+            for attachment_index, raw_attachment in enumerate(_attachment_items(item))
+            if (attachment := _normalize_attachment(raw_attachment, attachment_index)) is not None
+        ),
     )
+
+
+def _normalize_attachment(
+    item: Mapping[str, Any], index: int
+) -> NoticeAttachment | None:
+    """Normalize attachment metadata without exposing a source URL."""
+    attachment_id = _as_identifier(_first(item, "itemId", "itemid", "attachment_id", "id"))
+    if not attachment_id:
+        return None
+    filename = _clean_text(_first(item, "filename", "name", "title"), 240)
+    if not filename:
+        filename = f"HKTE attachment {index + 1}"
+    mime_type = _clean_text(_first(item, "mime_type", "mime", "content_type", "type"), 120)
+    size_value = item.get("size")
+    size = int(size_value) if isinstance(size_value, (int, float)) and size_value >= 0 else None
+    return NoticeAttachment(
+        id=attachment_id,
+        filename=filename,
+        mime_type=mime_type or "application/octet-stream",
+        size=size,
+    )
+
+
+def _notice_needs_attachment_metadata(item: Mapping[str, Any]) -> bool:
+    """Identify notices whose attachments need a metadata lookup."""
+    if item.get("download_right") or item.get("downloadRight"):
+        return True
+    text = str(_first(item, "body", "introduction") or "").casefold()
+    return "附件" in text or "attachment" in text
+
+
+def _extract_detail(payload: Any) -> dict[str, Any] | None:
+    """Extract a single detail object from known response envelopes."""
+    if isinstance(payload, Mapping):
+        for key in ("data", "item", "notice"):
+            nested = payload.get(key)
+            if isinstance(nested, Mapping):
+                return dict(nested)
+            if isinstance(nested, list) and nested and isinstance(nested[0], Mapping):
+                return dict(nested[0])
+        return dict(payload)
+    if isinstance(payload, list) and payload and isinstance(payload[0], Mapping):
+        return dict(payload[0])
+    return None
+
+
+def _attachment_items(item: Mapping[str, Any]) -> list[Mapping[str, Any]]:
+    """Accept attachment collection names used by different HKTE app builds."""
+    raw = _first(item, "attachments", "attachment", "files", "file_list", "filelist")
+    if isinstance(raw, Mapping):
+        return [raw]
+    if isinstance(raw, list):
+        return [value for value in raw if isinstance(value, Mapping)]
+    return []
 
 
 class _NoticeTextParser(HTMLParser):

@@ -66,6 +66,23 @@ async def test_client_uses_multipart_cookies_and_pagination(
                 else [{"nid": 50, "title": "Last notice", "unread": 0, "replied": 1}]
             )
             return web.json_response({"success": True, "data": {"data": items}})
+        if method == "GetNoticeData":
+            return web.json_response(
+                {
+                    "success": True,
+                    "data": {
+                        "nid": payload["nid"],
+                        "attachments": [
+                            {
+                                "itemId": "file-1",
+                                "name": "notice.pdf",
+                                "type": "application/pdf",
+                                "url": "https://example.test/attachment.pdf",
+                            }
+                        ],
+                    },
+                }
+            )
         if method == "GetMessageList":
             items = (
                 [{"mid": f"m{index}", "subject": "Message"} for index in range(40)]
@@ -103,11 +120,14 @@ async def test_client_uses_multipart_cookies_and_pagination(
     assert len(snapshot.children) == 1
     assert len(snapshot.children[0].notices) == 51
     assert snapshot.children[0].notices[0].content == "附件"
+    assert snapshot.children[0].notices[0].attachments[0].id == "file-1"
     assert len(snapshot.children[0].messages) == 41
     assert snapshot.children[0].homeworks[0].deadline == date(2026, 9, 20)
     assert snapshot.children[0].homeworks[0].submitted is False
     assert snapshot.children[0].homeworks[0].urgent is True
     assert ("GetAllNotices", {"user_id": 42, "start": 50, "limit": 50}) in calls
+    assert ("GetNoticeData", {"nid": 100}) in calls
+    assert all(method != "filedownload" for method, _ in calls)
     assert ("GetMessageList", {"user_id": 42, "start": 40}) in calls
     login_payload = calls[0][1]
     assert login_payload["loginname"] == "parent"
@@ -217,9 +237,19 @@ def test_notice_content_is_bounded_and_does_not_change_identity():
     assert notice.id == api._normalize_notice({"nid": 1, "body": "changed"}, 0).id
 
 
-def test_notice_normalization_ignores_provider_attachment_fields():
+def test_notice_metadata_normalization_omits_provider_url():
     notice = api._normalize_notice(
-        {"nid": 7, "title": "Notice", "attachment": {"itemid": "f-7", "name": "a.pdf"}},
+        {
+            "nid": 7,
+            "title": "Notice",
+            "attachment": {
+                "itemid": "f-7",
+                "name": "a.pdf",
+                "url": "https://example.test/a.pdf",
+            },
+        },
         0,
     )
-    assert notice.title == "Notice"
+    assert notice.attachments[0].id == "f-7"
+    assert notice.attachments[0].filename == "a.pdf"
+    assert not hasattr(notice.attachments[0], "url")

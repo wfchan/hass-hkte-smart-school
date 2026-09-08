@@ -24,9 +24,10 @@ summary sensors, deadline calendars and a new-item event entity.
 - Config flow, reauthentication and configurable 5-60 minute polling
 
 The integration never marks an item as read, signs a notice, submits homework,
-makes a payment or calls another state-changing endpoint. Notice text comes
-from the existing `GetAllNotices` response, without any additional requests.
-The integration does not retrieve, display or download attachments.
+makes a payment or calls another state-changing endpoint. For notices that
+advertise attachments, it may read display-safe metadata through
+`GetNoticeData`. It never retrieves attachment contents or calls a download
+endpoint.
 
 ## Install with HACS
 
@@ -43,7 +44,7 @@ options.
 
 ## Read notice content
 
-Version 0.3.5 provides a **Notice content** sensor for every child. Its `notices`
+Version 0.3.6 provides a **Notice content** sensor for every child. Its `notices`
 attribute contains the newest 20 distinct notices, sorted by issue date, with
 title, plain-text content, dates, unread and reply status. Its numeric state is
 the total fetched notice count; use the HACS card below to read the actual content.
@@ -53,8 +54,8 @@ For the recommended dashboard experience, add
 **Plugin**, install **HKTE Smart School Notices Card**, and add the generated
 resource. Add `custom:hkte-notices-card` to a dashboard; it discovers every
 child's notice-content sensor automatically, or accepts an explicit `entities`
-list. It supports all/unread filtering and expandable bodies. Attachments are
-not retrieved or displayed.
+list. It supports all/unread filtering, expandable bodies and attachment
+metadata. It does not offer attachment downloads.
 
 As a dependency-free fallback, add a **Manual** card using
 [examples/notices-card.yaml](examples/notices-card.yaml). It automatically
@@ -62,9 +63,10 @@ finds all children and expands the latest notice.
 Reading or expanding a notice never changes its HKTE read/reply status.
 
 Each body is limited to 20,000 characters, with `content_truncated` indicating
-truncation. A missing body is explicitly shown as unavailable. Attachments are
-not retrieved, displayed or downloaded by the integration or the supplied card.
-HTML is converted to plain text with paragraph breaks;
+truncation. A missing body is explicitly shown as unavailable. Attachment
+metadata may include only its ID, filename, MIME type and size. Attachment
+contents are never retrieved or downloaded by the integration or the supplied
+card. HTML is converted to plain text with paragraph breaks;
 scripts and embedded media are removed. The supplied card escapes provider
 content and never loads embedded links or images.
 
