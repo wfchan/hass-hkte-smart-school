@@ -5,7 +5,9 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import time
+from collections import deque
 from collections.abc import Mapping
 from dataclasses import asdict
 from datetime import timedelta
@@ -21,8 +23,11 @@ from homeassistant.helpers.storage import Store
 from .api import HkteClient, HkteError
 from .attachments import AttachmentError, async_download
 from .const import DOMAIN
-from .models import Notice
+from .models import AccountSnapshot, NewItemEvent, Notice
 from .rendering import render_pages
+
+MAX_AUTO_QUEUE = 20
+_LOGGER = logging.getLogger(__name__)
 
 TTL = 30 * 86400
 MAX_RESULTS = 200
@@ -267,6 +272,9 @@ class AnalysisManager:
         self.task: asyncio.Task[None] | None = None
         self.progress: dict[str, Any] = {}
         self._unsubscribe: Any = None
+        self._queue: deque[tuple[str, str, Notice]] = deque()
+        self._queued_keys: set[str] = set()
+        self._queue_task: asyncio.Task[None] | None = None
 
     @property
     def enabled(self) -> bool:
@@ -274,6 +282,60 @@ class AnalysisManager:
             self.options.get("ai_enabled")
             and all(self.options.get(key) for key in ("ai_base_url", "ai_api_key", "ai_model"))
         )
+
+    @property
+    def auto_enabled(self) -> bool:
+        return self.enabled and bool(self.options.get("ai_auto_enabled"))
+
+    async def async_enqueue_new_notices(
+        self, snapshot: AccountSnapshot | None, events: tuple[NewItemEvent, ...]
+    ) -> None:
+        """Queue newly detected notices serially; the first refresh is a baseline."""
+        if not self.auto_enabled or snapshot is None:
+            return
+        notices = {
+            (child.id, notice.id): notice for child in snapshot.children for notice in child.notices
+        }
+        for event in events:
+            if event.kind != "notice":
+                continue
+            key = json.dumps([event.child_id, event.item_id])
+            notice = notices.get((event.child_id, event.item_id))
+            if notice is None or key == self.active_key or key in self._queued_keys:
+                continue
+            existing = self.results.get(key)
+            if existing and existing.get("fingerprint") == fingerprint(notice, self.options):
+                continue
+            if len(self._queue) >= MAX_AUTO_QUEUE:
+                _LOGGER.warning("Automatic HKTE notice analysis queue is full; skipping new item")
+                continue
+            self._queue.append((key, event.child_id, notice))
+            self._queued_keys.add(key)
+        if self._queue and (self._queue_task is None or self._queue_task.done()):
+            self._queue_task = self.hass.async_create_background_task(
+                self._async_drain_queue(), "HKTE automatic notice analysis queue", eager_start=False
+            )
+
+    async def _async_drain_queue(self) -> None:
+        while self._queue:
+            key, child_id, notice = self._queue.popleft()
+            self._queued_keys.discard(key)
+            if self.task and not self.task.done():
+                await self.task
+            if not self.enabled:
+                continue
+            if self.status(child_id, notice).get("status") in {"completed", "partial"}:
+                continue
+            self.active_key = key
+            self.progress = {"status": "running", "stage": "downloading", "processed": 0}
+            self.task = self.hass.async_create_background_task(
+                self._run(key, child_id, notice),
+                "HKTE automatic notice analysis",
+                eager_start=False,
+            )
+            await self.task
+            self.active_key = None
+        self._queue_task = None
 
     async def async_initialize(self) -> None:
         stored = await self.store.async_load()
@@ -426,3 +488,8 @@ class AnalysisManager:
         if self.task and not self.task.done():
             self.task.cancel()
             await asyncio.gather(self.task, return_exceptions=True)
+        if self._queue_task and not self._queue_task.done():
+            self._queue_task.cancel()
+            await asyncio.gather(self._queue_task, return_exceptions=True)
+        self._queue.clear()
+        self._queued_keys.clear()

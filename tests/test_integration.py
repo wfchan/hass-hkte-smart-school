@@ -41,8 +41,7 @@ async def test_setup_creates_expected_entities(hass, snapshot):
     values = [
         hass.states.get(item.entity_id).state
         for item in entities
-        if item.domain == "sensor"
-        and not item.unique_id.endswith(("deadline", "notice_content"))
+        if item.domain == "sensor" and not item.unique_id.endswith(("deadline", "notice_content"))
     ]
     assert sorted(values) == ["1", "1", "1", "1", "1", "2"]
 
@@ -50,8 +49,7 @@ async def test_setup_creates_expected_entities(hass, snapshot):
     content_state = hass.states.get(content_entity.entity_id)
     assert content_state.state == "1"
     assert (
-        content_state.attributes["notices"][0]["content"]
-        == snapshot.children[0].notices[0].content
+        content_state.attributes["notices"][0]["content"] == snapshot.children[0].notices[0].content
     )
     assert content_state.attributes["has_more"] is False
     attachment = content_state.attributes["notices"][0]["attachments"][0]

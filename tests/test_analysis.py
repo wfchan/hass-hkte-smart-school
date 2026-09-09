@@ -4,6 +4,7 @@ import asyncio
 import json
 import time
 from dataclasses import replace
+from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -12,6 +13,7 @@ from aiohttp import web
 
 from custom_components.hkte_smart_school import analysis as mod
 from custom_components.hkte_smart_school.attachments import AttachmentError
+from custom_components.hkte_smart_school.models import AccountSnapshot, NewItemEvent
 
 from .test_attachments import image_file
 
@@ -21,6 +23,20 @@ OPTIONS = {
     "ai_model": "fixture-vision",
     "ai_api_key": "fixture-key",
 }
+
+
+def _snapshot_with_notices(snapshot, count: int) -> AccountSnapshot:
+    child = snapshot.children[0]
+    notices = tuple(
+        replace(
+            child.notices[0],
+            id=f"notice-{index}",
+            title=f"Notice {index}",
+            issued_at=child.notices[0].issued_at + timedelta(minutes=index),
+        )
+        for index in range(count)
+    )
+    return replace(snapshot, children=(replace(child, notices=notices),))
 
 
 def summary():
@@ -129,6 +145,51 @@ async def test_result_count_limit(hass):
     await manager.async_prune()
     assert len(manager.results) == 200
     assert "204" not in manager.results
+
+
+async def test_automatic_notice_queue_is_fifo_deduplicated_and_serial(hass, snapshot):
+    options = OPTIONS | {"ai_auto_enabled": True}
+    manager = mod.AnalysisManager(hass, "auto", SimpleNamespace(), options)
+    current = _snapshot_with_notices(snapshot, 3)
+    events = tuple(
+        NewItemEvent(
+            child_id="child-1",
+            kind="notice",
+            item_id=notice.id,
+            title=notice.title,
+            occurred_at=notice.issued_at,
+            deadline=notice.deadline,
+        )
+        for notice in current.children[0].notices
+    )
+    started: list[str] = []
+    active = 0
+    maximum_active = 0
+
+    async def fake_run(key, child_id, notice):
+        nonlocal active, maximum_active
+        active += 1
+        maximum_active = max(maximum_active, active)
+        started.append(notice.id)
+        await asyncio.sleep(0)
+        active -= 1
+
+    with patch.object(manager, "_run", side_effect=fake_run):
+        await manager.async_enqueue_new_notices(current, events + (events[0],))
+        await manager._queue_task
+
+    assert started == ["notice-0", "notice-1", "notice-2"]
+    assert maximum_active == 1
+    await manager.async_close()
+
+
+async def test_automatic_queue_ignores_non_notices_and_disabled_ai(hass, snapshot):
+    current = _snapshot_with_notices(snapshot, 1)
+    event = NewItemEvent("child-1", "message", "message-1", "message", None, None)
+    manager = mod.AnalysisManager(hass, "disabled", SimpleNamespace(), OPTIONS)
+    await manager.async_enqueue_new_notices(current, (event,))
+    assert not manager._queue
+    await manager.async_close()
 
 
 @pytest.mark.parametrize(

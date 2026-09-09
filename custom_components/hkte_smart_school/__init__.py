@@ -7,7 +7,7 @@ from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_PASSWORD, Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 from .analysis import AnalysisManager
@@ -53,6 +53,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: HkteConfigEntry) -> bool
     analysis = AnalysisManager(hass, entry.entry_id, client, entry.options)
     await analysis.async_initialize()
     entry.runtime_data = HkteRuntimeData(coordinator, client, analysis)
+
+    @callback
+    def _async_auto_analyze() -> None:
+        """Schedule automatic analysis from the coordinator's sync listener."""
+        hass.async_create_task(
+            analysis.async_enqueue_new_notices(coordinator.data, coordinator.new_items),
+            name="HKTE automatic notice analysis enqueue",
+        )
+
+    entry.async_on_unload(coordinator.async_add_listener(_async_auto_analyze))
     if not hass.data.get("hkte_smart_school_http"):
         hass.http.register_view(AttachmentView(hass))
         hass.http.register_view(AnalysisView(hass))

@@ -145,7 +145,11 @@ async def test_options_flow_sets_update_interval(hass):
         result["flow_id"], {CONF_UPDATE_INTERVAL: 30}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"] == {CONF_UPDATE_INTERVAL: 30, "ai_enabled": False}
+    assert result["data"] == {
+        CONF_UPDATE_INTERVAL: 30,
+        "ai_enabled": False,
+        "ai_auto_enabled": False,
+    }
 
 
 async def test_reauth_rejects_different_account(hass):

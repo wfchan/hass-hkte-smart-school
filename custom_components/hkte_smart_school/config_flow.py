@@ -171,6 +171,10 @@ class HkteOptionsFlow(config_entries.OptionsFlow):
                         "ai_enabled", default=self.config_entry.options.get("ai_enabled", False)
                     ): BooleanSelector(),
                     vol.Optional(
+                        "ai_auto_enabled",
+                        default=self.config_entry.options.get("ai_auto_enabled", False),
+                    ): BooleanSelector(),
+                    vol.Optional(
                         "ai_base_url",
                         description={
                             "suggested_value": self.config_entry.options.get("ai_base_url", "")

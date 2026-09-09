@@ -425,9 +425,7 @@ def _normalize_notice(item: Mapping[str, Any], index: int) -> Notice:
     )
 
 
-def _normalize_attachment(
-    item: Mapping[str, Any], index: int
-) -> NoticeAttachment | None:
+def _normalize_attachment(item: Mapping[str, Any], index: int) -> NoticeAttachment | None:
     """Normalize attachment metadata without exposing a source URL."""
     attachment_id = _as_identifier(_first(item, "itemId", "itemid", "attachment_id", "id"))
     if not attachment_id:

@@ -148,9 +148,7 @@ class HkteNoticeContentSensor(HkteChildEntity, SensorEntity):
     _attr_icon = "mdi:email-open-outline"
     _unrecorded_attributes = frozenset({"notices"})
 
-    def __init__(
-        self, coordinator: HkteDataUpdateCoordinator, child: ChildSnapshot
-    ) -> None:
+    def __init__(self, coordinator: HkteDataUpdateCoordinator, child: ChildSnapshot) -> None:
         super().__init__(coordinator, child, "notice_content")
 
     @property

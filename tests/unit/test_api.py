@@ -219,9 +219,9 @@ def test_missing_provider_id_is_stable_when_order_changes():
         ({"introduction": "Fallback text"}, "Fallback text"),
         ({"body": "First\nSecond"}, "First\nSecond"),
         ({"body": "<p>A &amp; B</p><div>Next<br>line</div>"}, "A & B\nNext\nline"),
-        ({"body": '<script>secret()</script><style>bad</style><p>Safe</p>'}, "Safe"),
+        ({"body": "<script>secret()</script><style>bad</style><p>Safe</p>"}, "Safe"),
         ({"body": '<img src="https://example.test/track"><a href="/token">Link</a>'}, "Link"),
-        ({"body": '<iframe>private</iframe><svg><text>hidden</text></svg>Visible'}, "Visible"),
+        ({"body": "<iframe>private</iframe><svg><text>hidden</text></svg>Visible"}, "Visible"),
     ],
 )
 def test_notice_content_normalization(fields, expected):

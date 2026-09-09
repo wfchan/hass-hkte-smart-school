@@ -42,6 +42,7 @@
         "data": {
           "update_interval": "更新間隔",
           "ai_enabled": "啟用手動 AI 分析",
+          "ai_auto_enabled": "收到新通告時自動進行 AI 分析",
           "ai_base_url": "AI Base URL",
           "ai_model": "視覺模型名稱",
           "ai_api_key": "AI API key"
@@ -49,6 +50,7 @@
         "data_description": {
           "update_interval": "兩次更新之間的分鐘數（5 至 60）",
           "ai_enabled": "分析時會將通告文字及附件頁面傳送至你設定的 AI 服務。摘要在本機保存 30 天。",
+          "ai_auto_enabled": "新通告會排隊逐份分析；首次同步只建立基線，不會分析現有通告。",
           "ai_base_url": "OpenAI 相容服務網址，按服務需要包括 /v1；遠端服務請使用 HTTPS。",
           "ai_api_key": "留空以保留已儲存的金鑰。"
         }

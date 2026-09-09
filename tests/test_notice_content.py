@@ -62,7 +62,7 @@ async def test_notice_feed_and_dashboard(hass, snapshot):
         assert "Notice 24" in rendered
         assert "&lt;img" in rendered
         assert '<img src="https://example.test/private">' not in rendered
-        assert '<details open>' in rendered
+        assert "<details open>" in rendered
 
         fetch.side_effect = HkteConnectionError()
         await entry.runtime_data.coordinator.async_refresh()

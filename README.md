@@ -75,7 +75,7 @@ content and never loads embedded links or images.
 
 ## Attachment downloads and AI summaries
 
-Install integration **0.4.2** and card **0.2.1** together. The download icon next
+Install integration **0.4.3** and card **0.2.1** together. The download icon next
 to each attachment uses your HA login and entity read permission. The server
 checks notice/attachment ownership, obtains a fresh HKTE `uHubSid`, and requests
 the verified HTTPS storage endpoint with `itemid` and `sid`. URLs, cookies and
@@ -92,7 +92,9 @@ Use HTTPS for remote services; HTTP is supported for trusted local services but
 does not encrypt documents or credentials in transit. A blank API-key field
 keeps the existing key. Disable AI to stop new analyses; downloads still work.
 
-OpenAI-compatible transport does **not** mean every model supports images or
+目前正式測試及支援的 AI model 只有 **MiniMax-M3**。其他 OpenAI-compatible
+model 尚未測試，不保證能正確處理圖片輸入或輸出格式；後續會逐步加入及驗證
+更多 model。OpenAI-compatible transport does **not** mean every model supports images or
 structured output. The integration requests a strict JSON schema, then validates
 all five sections, text limits and source/page references locally. Only an
 explicit unsupported-format-parameter error permits a prompt-only fallback;
@@ -134,8 +136,10 @@ server-side file archive. An executor already rendering a page finishes before
 its memory can be released. Files saved by your browser are yours to manage.
 
 繁體中文：在整合選項填寫 AI Base URL、API key 及支援圖片的模型，啟用後才可手動
-按「AI 整理重點」。通告正文及附件頁面會傳送至你指定的服務；請先確認其私隱政策。
-下載不需要啟用 AI。摘要保留 30 天，不會自動分析、付款、簽署或標記通告已讀。
+按「AI 整理重點」。目前只支援及測試 MiniMax-M3，其他 model 尚未測試，日後會逐步
+加入新的支援。通告正文及附件頁面會傳送至你指定的服務；請先確認其私隱政策。
+下載不需要啟用 AI。摘要保留 30 天；可另行開啟「收到新通告時自動進行 AI 分析」，
+新通告會按順序逐份處理，首次同步只建立基線，不會分析現有通告；不會付款、簽署或標記通告已讀。
 
 ## New-item automations
 
