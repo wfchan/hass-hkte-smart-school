@@ -71,7 +71,8 @@ def fake_client(chunks=(b"%PDF-1.4",), status=200, length=None):
         operation_lock=asyncio.Lock(),
         _session=session,
         _async_login=AsyncMock(),
-        _async_call=AsyncMock(side_effect=[detail, {"data": {"sid": "temporary"}}]),
+        _async_notices=AsyncMock(return_value=[{"nid": "notice", **detail["data"]}]),
+        _async_call=AsyncMock(return_value={"data": {"sid": "temporary"}}),
     )
     return client, context, detail
 
@@ -81,8 +82,8 @@ async def test_download_reads_all_chunks_and_reuses_session():
     file = await mod.async_download(client, "child", "notice", "file")
     assert file.content == b"%PDF-1.4\ncontent"
     assert file.mime_type == "application/pdf"
-    assert client._async_call.call_args_list[0].args == ("GetNoticeData", {"nid": "notice"})
-    assert client._async_call.call_args_list[1].args == ("uHubSid", {"user_id": "child"})
+    client._async_notices.assert_awaited_once_with("child")
+    client._async_call.assert_awaited_once_with("uHubSid", {"user_id": "child"})
     assert client._session.get.call_args.kwargs == {"allow_redirects": False}
     context.__aexit__.assert_awaited_once()
 
@@ -96,13 +97,7 @@ async def test_download_reads_all_chunks_and_reuses_session():
     ],
 )
 async def test_http_200_errors_are_not_files(chunks, code):
-    client, context, detail = fake_client(chunks)
-    client._async_call.side_effect = [
-        detail,
-        {"data": {"sid": "first"}},
-        detail,
-        {"data": {"sid": "second"}},
-    ]
+    client, context, _ = fake_client(chunks)
     with pytest.raises(AttachmentError, match=code):
         await mod.async_download(client, "child", "notice", "file")
     assert context.__aexit__.await_count == 2
@@ -119,8 +114,8 @@ async def test_size_limits_close_response(monkeypatch, length, chunks):
 
 
 async def test_auth_retry_once():
-    client, _, detail = fake_client()
-    client._async_call.side_effect = [_SessionExpiredError(), detail, {"data": {"sid": "new"}}]
+    client, _, _ = fake_client()
+    client._async_call.side_effect = [_SessionExpiredError(), {"data": {"sid": "new"}}]
     assert (await mod.async_download(client, "child", "notice", "file")).content
     client._async_login.assert_awaited_once()
     client._async_call.side_effect = [_SessionExpiredError(), _SessionExpiredError()]
@@ -133,6 +128,19 @@ async def test_wrong_attachment_never_requests_storage():
     with pytest.raises(AttachmentError, match="attachment_not_found"):
         await mod.async_download(client, "child", "notice", "other")
     client._session.get.assert_not_called()
+
+
+async def test_download_uses_inline_notices_when_detail_endpoint_unavailable():
+    client, _, detail = fake_client()
+    client._async_notices = AsyncMock(return_value=[{"nid": "notice", **detail["data"]}])
+
+    async def call(method, payload):
+        assert method == "uHubSid", "GetNoticeData is not available on this account"
+        return {"data": {"sid": "fixture"}}
+
+    client._async_call = AsyncMock(side_effect=call)
+    assert (await mod.async_download(client, "child", "notice", "file")).content
+    client._async_notices.assert_awaited_once_with("child")
 
 
 @pytest.mark.parametrize("status", [302, 500])

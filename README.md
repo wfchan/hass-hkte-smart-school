@@ -46,7 +46,7 @@ options.
 
 ## Read notice content
 
-Version 0.4.0 provides a **Notice content** sensor for every child. Its `notices`
+Version 0.4.1 provides a **Notice content** sensor for every child. Its `notices`
 attribute contains the newest 20 distinct notices, sorted by issue date, with
 title, plain-text content, dates, unread and reply status. Its numeric state is
 the total fetched notice count; use the HACS card below to read the actual content.
@@ -75,13 +75,15 @@ content and never loads embedded links or images.
 
 ## Attachment downloads and AI summaries
 
-Install integration **0.4.0** and card **0.2.0** together. The download icon next
+Install integration **0.4.1** and card **0.2.0** together. The download icon next
 to each attachment uses your HA login and entity read permission. The server
 checks notice/attachment ownership, obtains a fresh HKTE `uHubSid`, and requests
 the verified HTTPS storage endpoint with `itemid` and `sid`. URLs, cookies and
 session tokens stay on the server. Redirects, empty responses and error pages
 are rejected. The metadata label may be `FILE`; file signatures identify PDF
 and supported images. Other formats can be downloaded but not analyzed.
+Version 0.4.1 resolves download metadata through `GetAllNotices`, so accounts
+without a working `GetNoticeData` endpoint can still download their attachments.
 
 In **Settings > Devices & services > HKTE Smart School > Configure**, enable AI
 and enter the Base URL (including `/v1` when your provider requires it), API key,

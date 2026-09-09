@@ -14,7 +14,6 @@ from .api import (
     HkteInvalidAuthError,
     HkteResponseError,
     _attachment_items,
-    _extract_detail,
     _first,
     _SessionExpiredError,
 )
@@ -84,7 +83,7 @@ def detect_type(content: bytes, filename: str) -> str:
 async def async_download(
     client: HkteClient, child_id: str, notice_id: str, attachment_id: str
 ) -> DownloadedFile:
-    """Fetch the detail, a fresh uHubSid and bounded bytes with one auth retry."""
+    """Fetch owned notice metadata, a fresh uHubSid and bounded bytes."""
     async with client.operation_lock:
         return await _download_with_retry(client, child_id, notice_id, attachment_id)
 
@@ -94,8 +93,11 @@ async def _download_with_retry(
 ) -> DownloadedFile:
     for attempt in range(2):
         try:
-            detail = _extract_detail(
-                (await client._async_call("GetNoticeData", {"nid": notice_id})).get("data")
+            user_id: str | int = int(child_id) if child_id.isdecimal() else child_id
+            notices = await client._async_notices(user_id)
+            detail = next(
+                (item for item in notices if str(_first(item, "nid", "id")) == notice_id),
+                None,
             )
             raw = next(
                 (
@@ -107,7 +109,7 @@ async def _download_with_retry(
             )
             if raw is None:
                 raise AttachmentError("attachment_not_found")
-            sid_result = await client._async_call("uHubSid", {"user_id": child_id})
+            sid_result = await client._async_call("uHubSid", {"user_id": user_id})
             data: Any = sid_result.get("data")
             sid = data.get("sid") if isinstance(data, dict) else None
             if not isinstance(sid, str) or not sid.strip():
