@@ -22,12 +22,14 @@ summary sensors, deadline calendars and a new-item event entity.
 - `notice`, `message` and `homework` events for Home Assistant automations
 - English and Traditional Chinese translations
 - Config flow, reauthentication and configurable 5-60 minute polling
+- Authenticated attachment downloads (up to 20 MiB each)
+- Optional, manual AI summaries of notice text and PDF/JPEG/PNG attachments
 
 The integration never marks an item as read, signs a notice, submits homework,
 makes a payment or calls another state-changing endpoint. For notices that
 advertise attachments, it may read display-safe metadata through
-`GetNoticeData`. It never retrieves attachment contents or calls a download
-endpoint.
+`GetNoticeData`. Only explicit download or AI-analysis requests retrieve files;
+scheduled polling never downloads attachments or invokes AI.
 
 ## Install with HACS
 
@@ -44,7 +46,7 @@ options.
 
 ## Read notice content
 
-Version 0.3.6 provides a **Notice content** sensor for every child. Its `notices`
+Version 0.4.0 provides a **Notice content** sensor for every child. Its `notices`
 attribute contains the newest 20 distinct notices, sorted by issue date, with
 title, plain-text content, dates, unread and reply status. Its numeric state is
 the total fetched notice count; use the HACS card below to read the actual content.
@@ -55,7 +57,9 @@ For the recommended dashboard experience, add
 resource. Add `custom:hkte-notices-card` to a dashboard; it discovers every
 child's notice-content sensor automatically, or accepts an explicit `entities`
 list. It supports all/unread filtering, expandable bodies and attachment
-metadata. It does not offer attachment downloads.
+metadata. Card version **0.2.0** adds download buttons and manual AI analysis.
+The default remains five notices with the latest expanded; existing explicit
+card settings are preserved.
 
 As a dependency-free fallback, add a **Manual** card using
 [examples/notices-card.yaml](examples/notices-card.yaml). It automatically
@@ -65,10 +69,54 @@ Reading or expanding a notice never changes its HKTE read/reply status.
 Each body is limited to 20,000 characters, with `content_truncated` indicating
 truncation. A missing body is explicitly shown as unavailable. Attachment
 metadata may include only its ID, filename, MIME type and size. Attachment
-contents are never retrieved or downloaded by the integration or the supplied
-card. HTML is converted to plain text with paragraph breaks;
+contents are fetched only on request. HTML is converted to plain text with paragraph breaks;
 scripts and embedded media are removed. The supplied card escapes provider
 content and never loads embedded links or images.
+
+## Attachment downloads and AI summaries
+
+Install integration **0.4.0** and card **0.2.0** together. The download icon next
+to each attachment uses your HA login and entity read permission. The server
+checks notice/attachment ownership, obtains a fresh HKTE `uHubSid`, and requests
+the verified HTTPS storage endpoint with `itemid` and `sid`. URLs, cookies and
+session tokens stay on the server. Redirects, empty responses and error pages
+are rejected. The metadata label may be `FILE`; file signatures identify PDF
+and supported images. Other formats can be downloaded but not analyzed.
+
+In **Settings > Devices & services > HKTE Smart School > Configure**, enable AI
+and enter the Base URL (including `/v1` when your provider requires it), API key,
+and an image-capable model. `/chat/completions` is appended to the Base URL.
+Use HTTPS for remote services; HTTP is supported for trusted local services but
+does not encrypt documents or credentials in transit. A blank API-key field
+keeps the existing key. Disable AI to stop new analyses; downloads still work.
+
+Select **AI 整理重點** on a notice to send its text, attachment filenames and
+rendered pages to **your configured AI provider**. This explicitly discloses
+private school documents: select a provider whose privacy/retention policy you
+accept. Nothing is sent automatically. Summaries are in Traditional Chinese,
+with highlights, important dates, costs, parent actions, questions and page
+citations. Missing dates/costs must be marked as not provided. Always verify AI
+output against the original; the integration does not pay, reply or submit.
+
+Each analysis permits at most **10 attachments, 40 MiB total and 20 pages**.
+Limits fail explicitly; no pages are silently dropped. Corrupt, encrypted and
+unsupported files are listed as missing in a partial result. If every attachment
+fails, no new summary is generated. Truncated notice text is rejected. Progress,
+safe errors, retry and reanalysis are shown in the card. One notice is processed
+per account at a time; duplicate requests join the same job.
+
+Valid results are reused. Changes to notice content, attachment metadata or model
+settings mark a summary stale without triggering another request. Summaries and
+source indexes are saved privately in HA `.storage` for **30 days**, at most
+**200 results**, pruned hourly and on startup/save. They are not entity attributes
+and do not enter Recorder. Original files are held only in bounded memory during
+download/rendering and released on success, failure or cancellation; there is no
+server-side file archive. An executor already rendering a page finishes before
+its memory can be released. Files saved by your browser are yours to manage.
+
+繁體中文：在整合選項填寫 AI Base URL、API key 及支援圖片的模型，啟用後才可手動
+按「AI 整理重點」。通告正文及附件頁面會傳送至你指定的服務；請先確認其私隱政策。
+下載不需要啟用 AI。摘要保留 30 天，不會自動分析、付款、簽署或標記通告已讀。
 
 ## New-item automations
 
@@ -115,11 +163,14 @@ sequentially and follows at most 200 pages per collection.
 
 ## Privacy and credentials
 
-Home Assistant stores the login name and password in its standard config-entry
+Home Assistant stores the login name, password and AI API key in its standard config-entry
 storage. This storage is access-controlled by the Home Assistant host but is
 not separately encrypted. Protect `.storage`, backups and host administrator
 access. Session cookies remain in memory and are not written by this
 integration.
+
+Protect summary stores and backups too; they contain private school content.
+Deleting the integration does not promise secure erasure of existing backups.
 
 Notice text is visible to users and clients with access to Home Assistant
 entity states. The `notices` attribute is excluded from Recorder history by
@@ -145,7 +196,8 @@ attachments in an issue.
 ## Development
 
 Use Python 3.14.2 or newer. Install `homeassistant==2026.8.3` (or `2026.9.1`),
-`pytest-homeassistant-custom-component`, `pytest-aiohttp`, `ruff` and `mypy` in
+`pytest-homeassistant-custom-component`, `pytest-aiohttp`, `ruff`, `mypy`,
+`pypdfium2==5.13.0`, `Pillow==12.3.0` and `pypdf==6.0.0` (test fixtures only) in
 an isolated environment. Run `pytest -q`, `ruff check .` and
 `mypy custom_components/hkte_smart_school`. Fixtures are synthetic and only
 the local test server opens sockets. CI tests both supported Home Assistant

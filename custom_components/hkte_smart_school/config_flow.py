@@ -10,6 +10,7 @@ from homeassistant.const import CONF_PASSWORD
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
@@ -18,6 +19,7 @@ from homeassistant.helpers.selector import (
     TextSelectorType,
 )
 
+from .analysis import api_endpoint
 from .api import (
     HkteClient,
     HkteConnectionError,
@@ -133,13 +135,27 @@ class HkteOptionsFlow(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         """Edit the update interval."""
+        errors: dict[str, str] = {}
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            values = dict(self.config_entry.options) | user_input
+            if not user_input.get("ai_api_key") and self.config_entry.options.get("ai_api_key"):
+                values["ai_api_key"] = self.config_entry.options["ai_api_key"]
+            if values.get("ai_enabled"):
+                if not all(values.get(key) for key in ("ai_base_url", "ai_model", "ai_api_key")):
+                    errors["base"] = "ai_required"
+                else:
+                    try:
+                        api_endpoint(values["ai_base_url"])
+                    except ValueError:
+                        errors["base"] = "invalid_ai_url"
+            if not errors:
+                return self.async_create_entry(title="", data=values)
         current = self.config_entry.options.get(
             CONF_UPDATE_INTERVAL, DEFAULT_UPDATE_INTERVAL_MINUTES
         )
         return self.async_show_form(
             step_id="init",
+            errors=errors,
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_UPDATE_INTERVAL, default=current): NumberSelector(
@@ -150,7 +166,25 @@ class HkteOptionsFlow(config_entries.OptionsFlow):
                             mode=NumberSelectorMode.BOX,
                             unit_of_measurement="minutes",
                         )
-                    )
+                    ),
+                    vol.Optional(
+                        "ai_enabled", default=self.config_entry.options.get("ai_enabled", False)
+                    ): BooleanSelector(),
+                    vol.Optional(
+                        "ai_base_url",
+                        description={
+                            "suggested_value": self.config_entry.options.get("ai_base_url", "")
+                        },
+                    ): TextSelector(TextSelectorConfig(type=TextSelectorType.URL)),
+                    vol.Optional(
+                        "ai_model",
+                        description={
+                            "suggested_value": self.config_entry.options.get("ai_model", "")
+                        },
+                    ): TextSelector(),
+                    vol.Optional("ai_api_key"): TextSelector(
+                        TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                    ),
                 }
             ),
         )

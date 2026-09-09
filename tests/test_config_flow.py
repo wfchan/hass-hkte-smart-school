@@ -145,7 +145,7 @@ async def test_options_flow_sets_update_interval(hass):
         result["flow_id"], {CONF_UPDATE_INTERVAL: 30}
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert result["data"] == {CONF_UPDATE_INTERVAL: 30}
+    assert result["data"] == {CONF_UPDATE_INTERVAL: 30, "ai_enabled": False}
 
 
 async def test_reauth_rejects_different_account(hass):
@@ -174,3 +174,49 @@ async def test_reauth_rejects_different_account(hass):
         )
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "wrong_account"
+
+
+@pytest.mark.parametrize(
+    "fields,error",
+    [
+        ({"ai_enabled": True}, "ai_required"),
+        (
+            {
+                "ai_enabled": True,
+                "ai_api_key": "fixture",
+                "ai_model": "vision",
+                "ai_base_url": "ftp://example.test",
+            },
+            "invalid_ai_url",
+        ),
+    ],
+)
+async def test_ai_options_validation(hass, fields, error):
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_UPDATE_INTERVAL: 15, **fields}
+    )
+    assert result["errors"] == {"base": error}
+
+
+async def test_ai_options_retain_secret_without_prefilling(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={},
+        options={
+            "ai_enabled": True,
+            "ai_api_key": "fixture-key",
+            "ai_model": "vision",
+            "ai_base_url": "https://example.test/v1",
+        },
+    )
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert "fixture-key" not in str(result["data_schema"])
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_UPDATE_INTERVAL: 15, "ai_api_key": ""}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"]["ai_api_key"] == "fixture-key"

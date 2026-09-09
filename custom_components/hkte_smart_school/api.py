@@ -71,6 +71,7 @@ class HkteClient:
         self._password = password
         self._authenticated = False
         self._identity: AccountIdentity | None = None
+        self.operation_lock = asyncio.Lock()
 
     async def async_validate(self) -> AccountIdentity:
         """Authenticate and return a stable account identity."""
@@ -84,6 +85,10 @@ class HkteClient:
 
     async def async_fetch(self) -> AccountSnapshot:
         """Fetch and normalize one complete read-only account snapshot."""
+        async with self.operation_lock:
+            return await self._async_fetch_with_retry()
+
+    async def _async_fetch_with_retry(self) -> AccountSnapshot:
         if not self._authenticated:
             await self._async_login()
 

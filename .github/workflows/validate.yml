@@ -28,6 +28,7 @@ jobs:
           homeassistant==${{ matrix.homeassistant }}
           pytest pytest-asyncio pytest-aiohttp pytest-homeassistant-custom-component
           ruff mypy
+          pypdfium2==5.13.0 Pillow==12.3.0 pypdf==6.0.0
       - run: ruff check .
       - run: mypy custom_components/hkte_smart_school
       - run: pytest -q

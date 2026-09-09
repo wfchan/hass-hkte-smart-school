@@ -10,6 +10,7 @@ from homeassistant.const import CONF_PASSWORD, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
+from .analysis import AnalysisManager
 from .api import HkteClient
 from .const import (
     CONF_LOGIN_NAME,
@@ -18,6 +19,7 @@ from .const import (
     PLATFORMS,
 )
 from .coordinator import HkteDataUpdateCoordinator
+from .http import AnalysisView, AttachmentView
 
 
 @dataclass(slots=True)
@@ -26,6 +28,7 @@ class HkteRuntimeData:
 
     coordinator: HkteDataUpdateCoordinator
     client: HkteClient
+    analysis: AnalysisManager
 
 
 type HkteConfigEntry = ConfigEntry[HkteRuntimeData]
@@ -47,7 +50,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: HkteConfigEntry) -> bool
     )
     await coordinator.async_initialize()
     await coordinator.async_config_entry_first_refresh()
-    entry.runtime_data = HkteRuntimeData(coordinator, client)
+    analysis = AnalysisManager(hass, entry.entry_id, client, entry.options)
+    await analysis.async_initialize()
+    entry.runtime_data = HkteRuntimeData(coordinator, client, analysis)
+    if not hass.data.get("hkte_smart_school_http"):
+        hass.http.register_view(AttachmentView(hass))
+        hass.http.register_view(AnalysisView(hass))
+        hass.data["hkte_smart_school_http"] = True
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
     await hass.config_entries.async_forward_entry_setups(
         entry, [Platform(platform) for platform in PLATFORMS]
@@ -57,9 +66,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: HkteConfigEntry) -> bool
 
 async def async_unload_entry(hass: HomeAssistant, entry: HkteConfigEntry) -> bool:
     """Unload a config entry."""
-    return await hass.config_entries.async_unload_platforms(
+    unloaded = await hass.config_entries.async_unload_platforms(
         entry, [Platform(platform) for platform in PLATFORMS]
     )
+    if unloaded:
+        await entry.runtime_data.analysis.async_close()
+    return unloaded
 
 
 async def _async_reload_entry(hass: HomeAssistant, entry: HkteConfigEntry) -> None:

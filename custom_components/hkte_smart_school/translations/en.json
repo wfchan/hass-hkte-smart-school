@@ -32,14 +32,25 @@
     }
   },
   "options": {
+    "error": {
+      "ai_required": "Enter the AI Base URL, model and API key.",
+      "invalid_ai_url": "Enter a Base URL without credentials, query parameters or fragments."
+    },
     "step": {
       "init": {
         "title": "HKTE Smart School options",
         "data": {
-          "update_interval": "Update interval"
+          "update_interval": "Update interval",
+          "ai_enabled": "Enable manual AI analysis",
+          "ai_base_url": "AI Base URL",
+          "ai_model": "Vision model name",
+          "ai_api_key": "AI API key"
         },
         "data_description": {
-          "update_interval": "Minutes between updates (5-60)"
+          "update_interval": "Minutes between updates (5-60)",
+          "ai_enabled": "Analysis sends notice text and attachment pages to your configured AI provider. Summaries are stored locally for 30 days.",
+          "ai_base_url": "OpenAI-compatible base URL including /v1 where required; use HTTPS for remote providers.",
+          "ai_api_key": "Leave blank to keep the saved key."
         }
       }
     }
