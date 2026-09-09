@@ -34,6 +34,8 @@ scheduled polling never downloads attachments or invokes AI.
 
 ## Install with HACS
 
+[![Open your Home Assistant instance and show the HACS integrations dashboard](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=wfchan&repository=hass-hkte-smart-school&category=integration)
+
 1. Open HACS and select **Integrations**.
 2. Open the menu and select **Custom repositories**.
 3. Add `https://github.com/wfchan/hass-hkte-smart-school` as an **Integration**.
