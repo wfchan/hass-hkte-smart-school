@@ -1,6 +1,6 @@
 # HKTE Smart School for Home Assistant
 
-![Unofficial HKTE Smart School integration icon](custom_components/hkte_smart_school/brand/icon.png)
+<img src="custom_components/hkte_smart_school/brand/icon.png" alt="Unofficial HKTE Smart School integration icon" width="96" height="96">
 
 An unofficial, read-only Home Assistant integration for the HKTE Smart School
 parent app. It exposes a device for each child with notice, message and homework
@@ -79,7 +79,7 @@ content and never loads embedded links or images.
 
 ## Attachment downloads and AI summaries
 
-Install integration **0.4.4** and card **0.2.5** together. The download icon next
+Install integration **0.4.5** and card **0.2.6** together. The download icon next
 to each attachment uses your HA login and entity read permission. The server
 checks notice/attachment ownership, obtains a fresh HKTE `uHubSid`, and requests
 the verified HTTPS storage endpoint with `itemid` and `sid`. URLs, cookies and
