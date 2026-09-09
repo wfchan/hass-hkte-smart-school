@@ -75,7 +75,7 @@ content and never loads embedded links or images.
 
 ## Attachment downloads and AI summaries
 
-Install integration **0.4.1** and card **0.2.0** together. The download icon next
+Install integration **0.4.2** and card **0.2.1** together. The download icon next
 to each attachment uses your HA login and entity read permission. The server
 checks notice/attachment ownership, obtains a fresh HKTE `uHubSid`, and requests
 the verified HTTPS storage endpoint with `itemid` and `sid`. URLs, cookies and
@@ -91,6 +91,23 @@ and an image-capable model. `/chat/completions` is appended to the Base URL.
 Use HTTPS for remote services; HTTP is supported for trusted local services but
 does not encrypt documents or credentials in transit. A blank API-key field
 keeps the existing key. Disable AI to stop new analyses; downloads still work.
+
+OpenAI-compatible transport does **not** mean every model supports images or
+structured output. The integration requests a strict JSON schema, then validates
+all five sections, text limits and source/page references locally. Only an
+explicit unsupported-format-parameter error permits a prompt-only fallback;
+images are never silently removed. Invalid summary structure gets one retry.
+Truncated or refused responses are rejected and existing summaries are preserved.
+Card 0.2.1 independently validates API data and displays empty sections as
+"Not provided" / "未提供", without rendering model HTML or reasoning.
+
+**MiniMax-M3**, using `https://api.minimax.io/v1`, passed live synthetic-image
+tests on 2026-09-09. The integration automatically sets `reasoning_split: true`
+for this official host, as described in the
+[MiniMax OpenAI compatibility documentation](https://platform.minimax.io/docs/api-reference/text-openai-api).
+Some providers ignore JSON schema hints; local validation is still mandatory.
+These synthetic tests do not certify factual accuracy or every document layout.
+No real school documents or credentials are included in the test fixtures.
 
 Select **AI 整理重點** on a notice to send its text, attachment filenames and
 rendered pages to **your configured AI provider**. This explicitly discloses

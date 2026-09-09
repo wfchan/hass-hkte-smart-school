@@ -5,7 +5,7 @@ import json
 import time
 from dataclasses import replace
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from aiohttp import web
@@ -155,7 +155,11 @@ async def test_ai_request_has_no_hkte_auth_and_validates_json(hass, aiohttp_serv
         assert "tools" not in payload
         assert payload["model"] == "fixture-vision"
         assert payload["messages"][1]["content"][-1]["type"] == "image_url"
-        return web.json_response({"choices": [{"message": {"content": json.dumps(summary())}}]})
+        assert payload["response_format"]["json_schema"]["strict"] is True
+        assert "reasoning_split" not in payload
+        return web.json_response(
+            {"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(summary())}}]}
+        )
 
     app = web.Application()
     app.router.add_post("/chat/completions", handler)
@@ -214,3 +218,109 @@ async def test_ai_bad_responses(hass, aiohttp_server, socket_enabled, body):
         await mod.analyze(
             hass, OPTIONS | {"ai_base_url": str(server.make_url("/")).rstrip("/")}, "text", [], []
         )
+
+
+@pytest.mark.parametrize(
+    "wrapper", ["{}", "```json\n{}\n```", "<think>private reasoning</think>\n```json\n{}\n```"]
+)
+def test_reasoning_and_fences_are_not_summary(wrapper):
+    answer = wrapper.format(json.dumps(summary()))
+    result = mod.parse_answer(
+        {"choices": [{"finish_reason": "stop", "message": {"content": answer}}]},
+        [{"attachment_id": "attachment-1", "page": 1}],
+    )
+    assert result == summary()
+    assert "private reasoning" not in json.dumps(result)
+
+
+@pytest.mark.parametrize(
+    "finish,refusal", [("length", None), ("content_filter", None), ("stop", "refused")]
+)
+def test_incomplete_or_refused_response_is_rejected(finish, refusal):
+    with pytest.raises(AttachmentError, match="ai_incomplete_response"):
+        mod.parse_answer(
+            {
+                "choices": [
+                    {
+                        "finish_reason": finish,
+                        "message": {"content": json.dumps(summary()), "refusal": refusal},
+                    }
+                ]
+            },
+            [{"attachment_id": "attachment-1", "page": 1}],
+        )
+
+
+@pytest.mark.parametrize(
+    "answer", ["<think>unfinished", "```json\n{}\n``` trailing", "prefix {}", "{} suffix"]
+)
+def test_never_extract_json_from_arbitrary_prose(answer):
+    with pytest.raises(AttachmentError, match="invalid_ai_response"):
+        mod.parse_answer(
+            {"choices": [{"finish_reason": "stop", "message": {"content": answer}}]}, []
+        )
+
+
+async def test_format_negotiation_and_bounded_validation_retry(
+    hass, aiohttp_server, socket_enabled
+):
+    payloads = []
+
+    async def handler(request):
+        payload = await request.json()
+        payloads.append(payload)
+        if len(payloads) == 1:
+            return web.json_response(
+                {"error": {"param": "response_format", "code": "unsupported_parameter"}}, status=400
+            )
+        answer = {} if len(payloads) == 2 else summary()
+        return web.json_response(
+            {"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(answer)}}]}
+        )
+
+    app = web.Application()
+    app.router.add_post("/chat/completions", handler)
+    server = await aiohttp_server(app)
+    result = await mod.analyze(
+        hass,
+        OPTIONS | {"ai_base_url": str(server.make_url("/")).rstrip("/")},
+        "fixture",
+        [{"attachment_id": "attachment-1", "page": 1}],
+        ["data:image/jpeg;base64,fixture"],
+    )
+    assert result == summary()
+    assert len(payloads) == 3
+    assert "response_format" not in payloads[1]
+    assert "previous attempt failed validation" in payloads[2]["messages"][0]["content"]
+    assert all(p["messages"][1]["content"][-1]["type"] == "image_url" for p in payloads)
+
+
+async def test_minimax_split_and_retry_limit(hass):
+    async def chunks(size):
+        yield json.dumps(
+            {"choices": [{"finish_reason": "stop", "message": {"content": "{}"}}]}
+        ).encode()
+
+    session = MagicMock()
+    session.post.return_value.__aenter__ = AsyncMock(
+        return_value=SimpleNamespace(status=200, content=SimpleNamespace(iter_chunked=chunks))
+    )
+    with patch.object(mod, "async_get_clientsession", return_value=session):
+        with pytest.raises(AttachmentError, match="invalid_ai_response"):
+            await mod.analyze(
+                hass, OPTIONS | {"ai_base_url": "https://api.minimax.io/v1"}, "fixture", [], []
+            )
+        assert session.post.call_count == 2
+        assert session.post.call_args.kwargs["json"]["reasoning_split"] is True
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        {"param": "image_url", "code": "unsupported_parameter"},
+        {"param": "response_format", "code": "invalid_api_key"},
+        {"message": "image rejected"},
+    ],
+)
+def test_no_format_fallback_for_other_errors(error):
+    assert not mod.format_unsupported(json.dumps({"error": error}).encode())

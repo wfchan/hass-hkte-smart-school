@@ -29,6 +29,71 @@ MAX_RESULTS = 200
 SECTIONS = ("highlights", "dates", "costs", "actions", "questions")
 
 
+def summary_schema() -> dict[str, Any]:
+    """The provider hint is optional; local validation is always authoritative."""
+    reference = {
+        "type": "object",
+        "properties": {"attachment_id": {"type": "string"}, "page": {"type": "integer"}},
+        "required": ["attachment_id", "page"],
+        "additionalProperties": False,
+    }
+    item = {
+        "type": "object",
+        "properties": {
+            "text": {"type": "string"},
+            "sources": {"type": "array", "items": reference},
+        },
+        "required": ["text", "sources"],
+        "additionalProperties": False,
+    }
+    return {
+        "type": "object",
+        "properties": {key: {"type": "array", "items": item} for key in SECTIONS},
+        "required": list(SECTIONS),
+        "additionalProperties": False,
+    }
+
+
+def parse_answer(envelope: Any, sources: list[dict[str, Any]]) -> dict[str, Any]:
+    """Never expose reasoning, refusals or incomplete responses as a summary."""
+    try:
+        choice = envelope["choices"][0]
+        message = choice["message"]
+        if message.get("refusal") or choice.get("finish_reason") in {"content_filter", "length"}:
+            raise AttachmentError("ai_incomplete_response")
+        if choice.get("finish_reason") != "stop":
+            raise AttachmentError("invalid_ai_response")
+        answer = message["content"]
+        if not isinstance(answer, str):
+            raise AttachmentError("invalid_ai_response")
+        answer = answer.strip()
+        # Some compatible providers embed reasoning even when JSON was requested.
+        if answer.startswith("<think>"):
+            _, separator, answer = answer.partition("</think>")
+            if not separator:
+                raise AttachmentError("invalid_ai_response")
+            answer = answer.strip()
+        if answer.startswith("```"):
+            lines = answer.splitlines()
+            if lines[0] not in {"```", "```json"} or lines[-1] != "```":
+                raise AttachmentError("invalid_ai_response")
+            answer = "\n".join(lines[1:-1])
+        return validate_summary(json.loads(answer), sources)
+    except ValueError, KeyError, IndexError, TypeError, AttributeError:
+        raise AttachmentError("invalid_ai_response") from None
+
+
+def format_unsupported(raw: bytes | bytearray) -> bool:
+    """Negotiate only explicit format errors, never image/auth/provider errors."""
+    try:
+        error = json.loads(raw)["error"]
+        return error.get("param") in {"response_format", "response_format.type"} and error.get(
+            "code"
+        ) in {"unsupported_parameter", "unsupported_value"}
+    except ValueError, KeyError, TypeError, AttributeError:
+        return False
+
+
 def api_endpoint(base: str) -> str:
     """Validate the explicitly configured AI endpoint without following redirects."""
     parsed = urlsplit(base)
@@ -120,44 +185,65 @@ async def analyze(
         "with keys highlights, dates, costs, actions, questions. Each value is a list "
         'of {"text":"...","sources":[{"attachment_id":"...","page":1}]}. '
         "Cite provided source IDs and exact page numbers for factual statements. "
-        "Use page 0 for the notice text. Missing-information statements may have no "
-        "sources. Maximum 20 items per section, 2000 characters per item, 16000 total."
+        "Use page 0 ONLY for attachment_id notice; images use their supplied page numbers "
+        "starting at 1. Include EVERY explicitly stated event date, time, reply deadline, "
+        "fee, and required item/action. Do not invent payment methods or reply mechanisms. "
+        "Missing-information statements may have no sources. Use plain text, not Markdown, "
+        "HTML, code fences or reasoning. Maximum 20 items per section, 2000 characters "
+        "per item, 16000 total."
     )
+    payload: dict[str, Any] = {
+        "model": options["ai_model"],
+        "messages": [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": content},
+        ],
+        "max_tokens": 6000,
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {"name": "notice_summary", "strict": True, "schema": summary_schema()},
+        },
+    }
+    endpoint = api_endpoint(str(options["ai_base_url"]))
+    if urlsplit(endpoint).hostname == "api.minimax.io":
+        payload["reasoning_split"] = True
+    retried_format = False
     try:
         async with asyncio.timeout(180):
-            async with async_get_clientsession(hass).post(
-                api_endpoint(str(options["ai_base_url"])),
-                headers={"Authorization": f"Bearer {options['ai_api_key']}"},
-                json={
-                    "model": options["ai_model"],
-                    "messages": [
-                        {"role": "system", "content": prompt},
-                        {"role": "user", "content": content},
-                    ],
-                    "max_tokens": 6000,
-                },
-                allow_redirects=False,
-            ) as response:
-                if response.status in (401, 403):
-                    raise AttachmentError("ai_auth")
-                if response.status == 429:
-                    raise AttachmentError("ai_rate_limit")
-                if response.status in (400, 415, 422):
-                    raise AttachmentError("ai_unsupported_input")
-                if response.status != 200:
-                    raise AttachmentError("ai_failed")
-                raw = bytearray()
-                async for chunk in response.content.iter_chunked(16384):
-                    raw.extend(chunk)
-                    if len(raw) > 128 * 1024:
-                        raise AttachmentError("invalid_ai_response")
-                envelope = json.loads(raw)
-                answer = envelope["choices"][0]["message"]["content"]
-                if not isinstance(answer, str):
-                    raise AttachmentError("invalid_ai_response")
-                if answer.strip().startswith("```"):
-                    answer = "\n".join(answer.strip().splitlines()[1:-1])
-                return validate_summary(json.loads(answer), sources)
+            for _attempt in range(3):
+                async with async_get_clientsession(hass).post(
+                    endpoint,
+                    headers={"Authorization": f"Bearer {options['ai_api_key']}"},
+                    json=payload,
+                    allow_redirects=False,
+                ) as response:
+                    if response.status in (401, 403):
+                        raise AttachmentError("ai_auth")
+                    if response.status == 429:
+                        raise AttachmentError("ai_rate_limit")
+                    if response.status not in (200, 400, 415, 422):
+                        raise AttachmentError("ai_failed")
+                    raw = bytearray()
+                    async for chunk in response.content.iter_chunked(16384):
+                        raw.extend(chunk)
+                        if len(raw) > 128 * 1024:
+                            raise AttachmentError("invalid_ai_response")
+                    if response.status != 200:
+                        if "response_format" in payload and format_unsupported(raw):
+                            del payload["response_format"]
+                            continue
+                        raise AttachmentError("ai_unsupported_input")
+                    try:
+                        return parse_answer(json.loads(raw), sources)
+                    except AttachmentError as err:
+                        if str(err) != "invalid_ai_response" or retried_format:
+                            raise
+                        retried_format = True
+                        payload["messages"][0]["content"] = prompt + (
+                            " A previous attempt failed validation. Return exactly the five "
+                            "JSON sections and only the supplied source ID/page pairs."
+                        )
+            raise AttachmentError("invalid_ai_response")
     except TimeoutError:
         raise AttachmentError("ai_timeout") from None
     except ClientError:
