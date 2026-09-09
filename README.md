@@ -47,7 +47,7 @@ options.
 
 ## Read notice content
 
-Version 0.4.1 provides a **Notice content** sensor for every child. Its `notices`
+Each child has a **Notice content** sensor. Its `notices`
 attribute contains the newest 20 distinct notices, sorted by issue date, with
 title, plain-text content, dates, unread and reply status. Its numeric state is
 the total fetched notice count; use the HACS card below to read the actual content.
@@ -58,10 +58,9 @@ For the recommended dashboard experience, add
 resource. Add `custom:hkte-notices-card` to a dashboard; it discovers every
 child's notice-content sensor automatically, or accepts an explicit `entities`
 list. It supports all/unread filtering, expandable bodies and attachment
-metadata. Card version **0.2.5** adds highlighted deadlines, download buttons and
-manual AI analysis. Integration version **0.4.3** adds optional queued automatic
-analysis for new notices; the first sync establishes a baseline and does not analyze
-existing notices.
+metadata. The current pairing is card **0.2.6** with integration **0.4.5**;
+automatic analysis of new notices is optional, queued FIFO and silent during the
+first baseline sync.
 The default remains five notices with the latest expanded; existing explicit
 card settings are preserved.
 
@@ -86,8 +85,8 @@ the verified HTTPS storage endpoint with `itemid` and `sid`. URLs, cookies and
 session tokens stay on the server. Redirects, empty responses and error pages
 are rejected. The metadata label may be `FILE`; file signatures identify PDF
 and supported images. Other formats can be downloaded but not analyzed.
-Version 0.4.1 resolves download metadata through `GetAllNotices`, so accounts
-without a working `GetNoticeData` endpoint can still download their attachments.
+Download metadata is resolved through `GetAllNotices`, so accounts without a
+working `GetNoticeData` endpoint can still download their attachments.
 
 In **Settings > Devices & services > HKTE Smart School > Configure**, enable AI
 and enter the Base URL (including `/v1` when your provider requires it), API key,
@@ -104,7 +103,7 @@ all five sections, text limits and source/page references locally. Only an
 explicit unsupported-format-parameter error permits a prompt-only fallback;
 images are never silently removed. Invalid summary structure gets one retry.
 Truncated or refused responses are rejected and existing summaries are preserved.
-Card 0.2.1 independently validates API data and displays empty sections as
+The card independently validates API data and displays empty sections as
 "Not provided" / "未提供", without rendering model HTML or reasoning.
 
 **MiniMax-M3**, using `https://api.minimax.io/v1`, passed live synthetic-image
