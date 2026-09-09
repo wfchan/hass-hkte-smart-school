@@ -1,6 +1,6 @@
 # HKTE Smart School for Home Assistant
 
-![Unofficial school integration icon](custom_components/hkte_smart_school/brand/icon.png)
+![Unofficial HKTE Smart School integration icon](custom_components/hkte_smart_school/brand/icon.png)
 
 An unofficial, read-only Home Assistant integration for the HKTE Smart School
 parent app. It exposes a device for each child with notice, message and homework
@@ -23,7 +23,8 @@ summary sensors, deadline calendars and a new-item event entity.
 - English and Traditional Chinese translations
 - Config flow, reauthentication and configurable 5-60 minute polling
 - Authenticated attachment downloads (up to 20 MiB each)
-- Optional, manual AI summaries of notice text and PDF/JPEG/PNG attachments
+- Optional AI summaries of notice text and PDF/JPEG/PNG attachments
+- Optional automatic AI analysis for newly received notices, processed FIFO one at a time
 
 The integration never marks an item as read, signs a notice, submits homework,
 makes a payment or calls another state-changing endpoint. For notices that
@@ -57,7 +58,10 @@ For the recommended dashboard experience, add
 resource. Add `custom:hkte-notices-card` to a dashboard; it discovers every
 child's notice-content sensor automatically, or accepts an explicit `entities`
 list. It supports all/unread filtering, expandable bodies and attachment
-metadata. Card version **0.2.0** adds download buttons and manual AI analysis.
+metadata. Card version **0.2.5** adds highlighted deadlines, download buttons and
+manual AI analysis. Integration version **0.4.3** adds optional queued automatic
+analysis for new notices; the first sync establishes a baseline and does not analyze
+existing notices.
 The default remains five notices with the latest expanded; existing explicit
 card settings are preserved.
 
@@ -75,7 +79,7 @@ content and never loads embedded links or images.
 
 ## Attachment downloads and AI summaries
 
-Install integration **0.4.3** and card **0.2.1** together. The download icon next
+Install integration **0.4.4** and card **0.2.5** together. The download icon next
 to each attachment uses your HA login and entity read permission. The server
 checks notice/attachment ownership, obtains a fresh HKTE `uHubSid`, and requests
 the verified HTTPS storage endpoint with `itemid` and `sid`. URLs, cookies and
@@ -110,6 +114,10 @@ for this official host, as described in the
 Some providers ignore JSON schema hints; local validation is still mandatory.
 These synthetic tests do not certify factual accuracy or every document layout.
 No real school documents or credentials are included in the test fixtures.
+
+The icon shown above is original, unofficial generated artwork for this community
+integration. It is not an HKTE or school logo and contains no student data,
+credentials or provider content.
 
 Select **AI 整理重點** on a notice to send its text, attachment filenames and
 rendered pages to **your configured AI provider**. This explicitly discloses
