@@ -44,9 +44,9 @@ summary sensors, deadline calendars and a new-item event entity.
 
 摘要以繁體中文提供內容重點、重要日期、費用、家長待辦及需確認事項。每次最多 10 個附件、40 MiB 及 20 頁；損壞、加密或不支援檔案會列明遺漏。摘要只在 Home Assistant 本機保留 30 天（最多 200 份），不寫入 Recorder；原檔只在處理期間暫存。
 
-分析會同時提供 HKTE 系統截止時間及附件內容。若同一用途的日期不一致，AI 會被要求列明兩個來源並提示向學校確認，不會將活動或交件日期強行改成系統截止時間。舊摘要可按「重新分析」更新。
+通告卡的截止日期只來自 AI 對正文及附件的分析：優先顯示明確的回覆期限，其次為交件期限，活動日期不作截止日期。只有日期時不會補上時間。未分析、舊摘要缺少日期欄位或分析不完整時會顯示提示；舊摘要可按「重新分析」更新。原有日曆仍使用 HKTE 提供的日期。
 
-Analysis includes the HKTE system deadline alongside document content. If dates for the same purpose conflict, the model is instructed to identify both sources and ask parents to confirm with the school. Activity and submission dates remain separate. Use Analyze again to update an existing summary with this context.
+The card deadline comes only from AI analysis of the notice body and attachments: an explicit reply deadline takes priority, followed by a submission deadline. Event dates are excluded and date-only deadlines have no invented time. Pending, legacy and incomplete analyses show a status instead. Use Analyze again to extract a deadline for an older summary. Existing calendars continue to use HKTE dates.
 
 ### 私隱及支援
 

@@ -88,6 +88,77 @@ def summary():
     return result
 
 
+def ai_answer():
+    return summary() | {"primary_deadline": None}
+
+
+@pytest.mark.parametrize("clock", [None, "12:30"])
+def test_structured_deadline_validated(clock):
+    sources = [{"attachment_id": "attachment-1", "page": 1}]
+    deadline = {"date": "2026-09-11", "time": clock, "kind": "reply", "sources": sources}
+    answer = ai_answer() | {"primary_deadline": deadline}
+    parsed = mod.parse_answer(
+        {"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(answer)}}]},
+        sources,
+    )
+    assert parsed["primary_deadline"] == deadline
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"date": "2026-02-30"},
+        {"date": "11 Sep"},
+        {"time": "24:00"},
+        {"time": "23:59:00"},
+        {"kind": "event"},
+        {"sources": []},
+        {"sources": [{"attachment_id": "unknown", "page": 1}]},
+    ],
+)
+def test_invalid_deadline_rejected(change):
+    sources = [{"attachment_id": "attachment-1", "page": 1}]
+    deadline = {"date": "2026-09-11", "time": None, "kind": "reply", "sources": sources} | change
+    with pytest.raises(AttachmentError, match="invalid_ai_response"):
+        mod.validate_deadline(deadline, sources)
+
+
+def test_new_ai_response_requires_deadline_field():
+    with pytest.raises(AttachmentError, match="invalid_ai_response"):
+        mod.parse_answer(
+            {"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(summary())}}]},
+            [],
+        )
+
+
+async def test_ai_deadline_survives_restore_independent_of_api_date(hass, snapshot):
+    notice = snapshot.children[0].notices[0]
+    deadline = {
+        "date": "2026-09-11",
+        "time": None,
+        "kind": "reply",
+        "sources": [{"attachment_id": "attachment-1", "page": 1}],
+    }
+    manager = mod.AnalysisManager(hass, "ai-deadline", SimpleNamespace(), OPTIONS)
+    with (
+        patch.object(mod, "async_download", AsyncMock(return_value=image_file())),
+        patch.object(
+            mod, "analyze", AsyncMock(return_value=summary() | {"primary_deadline": deadline})
+        ),
+    ):
+        manager.start("child-1", notice)
+        await manager.task
+    state = manager.status("child-1", notice)
+    assert state["primary_deadline"] == deadline
+    assert set(state["summary"]) == set(mod.SECTIONS)
+    assert notice.deadline.isoformat()[:10] != deadline["date"]
+    await manager.async_close()
+    restored = mod.AnalysisManager(hass, "ai-deadline", SimpleNamespace(), OPTIONS)
+    await restored.async_initialize()
+    assert restored.status("child-1", notice)["primary_deadline"] == deadline
+    await restored.async_close()
+
+
 def test_source_validation_and_size_bounds():
     sources = [{"attachment_id": "attachment-1", "page": 1}]
     assert mod.validate_summary(summary(), sources) == summary()
@@ -260,7 +331,11 @@ async def test_ai_request_has_no_hkte_auth_and_validates_json(hass, aiohttp_serv
         assert payload["response_format"]["json_schema"]["strict"] is True
         assert "reasoning_split" not in payload
         return web.json_response(
-            {"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(summary())}}]}
+            {
+                "choices": [
+                    {"finish_reason": "stop", "message": {"content": json.dumps(ai_answer())}}
+                ]
+            }
         )
 
     app = web.Application()
@@ -274,10 +349,10 @@ async def test_ai_request_has_no_hkte_auth_and_validates_json(hass, aiohttp_serv
         [{"attachment_id": "attachment-1", "page": 1}],
         ["data:image/jpeg;base64,fixture"],
     )
-    assert result == summary()
+    assert result == ai_answer()
 
 
-async def test_ai_receives_system_dates_separately_from_document(
+async def test_ai_excludes_system_deadline_from_document_analysis(
     hass, aiohttp_server, socket_enabled
 ):
     metadata = {
@@ -290,13 +365,20 @@ async def test_ai_receives_system_dates_separately_from_document(
     async def handler(request):
         payload = await request.json()
         supplied = json.loads(payload["messages"][1]["content"][0]["text"])
-        assert supplied["hkte_metadata"] == metadata
+        assert supplied["notice_context"] == {
+            key: value for key, value in metadata.items() if key != "deadline"
+        }
+        assert metadata["deadline"] not in json.dumps(supplied)
         assert supplied["notice"] == "Attachment reply deadline: October 1"
         prompt = payload["messages"][0]["content"]
-        assert "report BOTH dates" in prompt
-        assert "Do not silently replace" in prompt
+        assert "Extract primary_deadline ONLY" in prompt
+        assert "reply" in prompt and "submission" in prompt
         return web.json_response(
-            {"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(summary())}}]}
+            {
+                "choices": [
+                    {"finish_reason": "stop", "message": {"content": json.dumps(ai_answer())}}
+                ]
+            }
         )
 
     app = web.Application()
@@ -323,10 +405,10 @@ async def test_analysis_manager_passes_notice_dates(hass, snapshot):
         manager.start("child-1", notice)
         await manager.task
         metadata = analyze.call_args.kwargs["metadata"]
-        assert metadata["deadline"] == notice.deadline.isoformat()
+        assert "deadline" not in metadata
         assert metadata["issued_at"] == notice.issued_at.isoformat()
         assert metadata["title"] == notice.title
-        assert set(metadata) == {"title", "issued_at", "deadline", "timezone"}
+        assert set(metadata) == {"title", "issued_at", "timezone"}
     await manager.async_close()
 
 
@@ -379,12 +461,12 @@ async def test_ai_bad_responses(hass, aiohttp_server, socket_enabled, body):
     "wrapper", ["{}", "```json\n{}\n```", "<think>private reasoning</think>\n```json\n{}\n```"]
 )
 def test_reasoning_and_fences_are_not_summary(wrapper):
-    answer = wrapper.format(json.dumps(summary()))
+    answer = wrapper.format(json.dumps(ai_answer()))
     result = mod.parse_answer(
         {"choices": [{"finish_reason": "stop", "message": {"content": answer}}]},
         [{"attachment_id": "attachment-1", "page": 1}],
     )
-    assert result == summary()
+    assert result == ai_answer()
     assert "private reasoning" not in json.dumps(result)
 
 
@@ -398,7 +480,7 @@ def test_incomplete_or_refused_response_is_rejected(finish, refusal):
                 "choices": [
                     {
                         "finish_reason": finish,
-                        "message": {"content": json.dumps(summary()), "refusal": refusal},
+                        "message": {"content": json.dumps(ai_answer()), "refusal": refusal},
                     }
                 ]
             },
@@ -428,7 +510,7 @@ async def test_format_negotiation_and_bounded_validation_retry(
             return web.json_response(
                 {"error": {"param": "response_format", "code": "unsupported_parameter"}}, status=400
             )
-        answer = {} if len(payloads) == 2 else summary()
+        answer = {} if len(payloads) == 2 else ai_answer()
         return web.json_response(
             {"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(answer)}}]}
         )
@@ -443,7 +525,7 @@ async def test_format_negotiation_and_bounded_validation_retry(
         [{"attachment_id": "attachment-1", "page": 1}],
         ["data:image/jpeg;base64,fixture"],
     )
-    assert result == summary()
+    assert result == ai_answer()
     assert len(payloads) == 3
     assert "response_format" not in payloads[1]
     assert "previous attempt failed validation" in payloads[2]["messages"][0]["content"]
