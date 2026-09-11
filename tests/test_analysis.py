@@ -5,7 +5,7 @@ import hashlib
 import json
 import time
 from dataclasses import asdict, replace
-from datetime import timedelta
+from datetime import date, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -131,7 +131,22 @@ def test_new_ai_response_requires_deadline_field():
         )
 
 
-async def test_ai_deadline_survives_restore_independent_of_api_date(hass, snapshot):
+def test_missing_system_deadline_has_no_ai_fallback(snapshot):
+    notice = replace(snapshot.children[0].notices[0], deadline=None)
+    assert mod.system_reply_deadline(notice) is None
+
+
+def test_date_only_system_deadline_has_no_invented_time(snapshot):
+    notice = replace(snapshot.children[0].notices[0], deadline=date(2026, 9, 17))
+    assert mod.system_reply_deadline(notice) == {
+        "date": "2026-09-17",
+        "time": None,
+        "kind": "reply",
+        "sources": [{"attachment_id": "notice", "page": 0}],
+    }
+
+
+async def test_system_deadline_overrides_ai_and_survives_restore(hass, snapshot):
     notice = snapshot.children[0].notices[0]
     deadline = {
         "date": "2026-09-11",
@@ -149,13 +164,14 @@ async def test_ai_deadline_survives_restore_independent_of_api_date(hass, snapsh
         manager.start("child-1", notice)
         await manager.task
     state = manager.status("child-1", notice)
-    assert state["primary_deadline"] == deadline
+    expected = mod.system_reply_deadline(notice)
+    assert state["primary_deadline"] == expected
     assert set(state["summary"]) == set(mod.SECTIONS)
     assert notice.deadline.isoformat()[:10] != deadline["date"]
     await manager.async_close()
     restored = mod.AnalysisManager(hass, "ai-deadline", SimpleNamespace(), OPTIONS)
     await restored.async_initialize()
-    assert restored.status("child-1", notice)["primary_deadline"] == deadline
+    assert restored.status("child-1", notice)["primary_deadline"] == expected
     await restored.async_close()
 
 
@@ -352,9 +368,7 @@ async def test_ai_request_has_no_hkte_auth_and_validates_json(hass, aiohttp_serv
     assert result == ai_answer()
 
 
-async def test_ai_excludes_system_deadline_from_document_analysis(
-    hass, aiohttp_server, socket_enabled
-):
+async def test_ai_uses_system_reply_deadline_as_authority(hass, aiohttp_server, socket_enabled):
     metadata = {
         "title": "School activity",
         "issued_at": "2026-10-01T09:00:00+08:00",
@@ -365,13 +379,11 @@ async def test_ai_excludes_system_deadline_from_document_analysis(
     async def handler(request):
         payload = await request.json()
         supplied = json.loads(payload["messages"][1]["content"][0]["text"])
-        assert supplied["notice_context"] == {
-            key: value for key, value in metadata.items() if key != "deadline"
-        }
-        assert metadata["deadline"] not in json.dumps(supplied)
+        assert supplied["notice_context"] == metadata
         assert supplied["notice"] == "Attachment reply deadline: October 1"
         prompt = payload["messages"][0]["content"]
-        assert "Extract primary_deadline ONLY" in prompt
+        assert "authoritative reply deadline" in prompt
+        assert "HKTE system date takes precedence" in prompt
         assert "reply" in prompt and "submission" in prompt
         return web.json_response(
             {
@@ -405,10 +417,10 @@ async def test_analysis_manager_passes_notice_dates(hass, snapshot):
         manager.start("child-1", notice)
         await manager.task
         metadata = analyze.call_args.kwargs["metadata"]
-        assert "deadline" not in metadata
+        assert metadata["deadline"] == notice.deadline.isoformat()
         assert metadata["issued_at"] == notice.issued_at.isoformat()
         assert metadata["title"] == notice.title
-        assert set(metadata) == {"title", "issued_at", "timezone"}
+        assert set(metadata) == {"title", "issued_at", "deadline", "timezone"}
     await manager.async_close()
 
 

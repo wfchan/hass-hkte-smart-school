@@ -11,10 +11,11 @@ import time
 from collections import deque
 from collections.abc import Mapping
 from dataclasses import asdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from datetime import time as date_time
 from typing import Any
 from urllib.parse import urlsplit
+from zoneinfo import ZoneInfo
 
 from aiohttp import ClientError
 from homeassistant.core import HomeAssistant
@@ -179,6 +180,27 @@ def summary_matches(saved: dict[str, Any], notice: Notice, options: Mapping[str,
     return False
 
 
+def system_reply_deadline(notice: Notice) -> dict[str, Any] | None:
+    """The provider's configured reply deadline takes precedence over AI output."""
+    if notice.deadline is None:
+        return None
+    deadline = notice.deadline
+    clock = None
+    if isinstance(deadline, datetime):
+        zone = ZoneInfo("Asia/Hong_Kong")
+        deadline = (
+            deadline.replace(tzinfo=zone) if deadline.tzinfo is None else deadline.astimezone(zone)
+        )
+        clock = deadline.strftime("%H:%M")
+        deadline = deadline.date()
+    return {
+        "date": deadline.isoformat(),
+        "time": clock,
+        "kind": "reply",
+        "sources": [{"attachment_id": "notice", "page": 0}],
+    }
+
+
 def validate_deadline(value: Any, sources: list[dict[str, Any]]) -> dict[str, Any] | None:
     """Accept only a real calendar date and citations to the analyzed documents."""
     if value is None:
@@ -272,7 +294,8 @@ async def analyze(
                     "notice": body,
                     "sources": sources,
                     "notice_context": {
-                        key: metadata.get(key) for key in ("title", "issued_at", "timezone")
+                        key: metadata.get(key)
+                        for key in ("title", "issued_at", "deadline", "timezone")
                     }
                     if metadata
                     else None,
@@ -301,15 +324,19 @@ async def analyze(
         "Use page 0 ONLY for attachment_id notice; images use their supplied page numbers "
         "starting at 1. Include EVERY explicitly stated event date, time, reply deadline, "
         "and submission date, keeping their purposes distinct. notice_context supplies "
-        "title, issued_at and timezone for context only; issued_at is NOT a deadline. "
-        "Extract primary_deadline ONLY from the notice body or attachment evidence. "
-        "Never use a provider/system deadline, the issue date or an activity date. "
-        "Choose the earliest explicit reply deadline; only if none exists, choose "
-        "the earliest explicit submission deadline. Keep all other dates in dates. "
+        "title, issued_at, deadline and timezone. The HKTE system deadline is the "
+        "authoritative reply deadline. Use it in primary_deadline, dates and parent "
+        "actions, citing attachment_id notice, page 0. If a PDF/body reply date "
+        "differs, report that discrepancy in questions, explicitly state that the "
+        "HKTE system date takes precedence and the document may be incorrect. "
+        "Do not instruct parents to follow the conflicting document reply date. "
+        "Keep event and submission dates separate and unchanged. If the system "
+        "deadline is missing, primary_deadline must be null; document deadlines "
+        "may be described as document-only dates, never as the HKTE reply deadline. "
         "Return primary_deadline as {date: YYYY-MM-DD, time: HH:MM or null, "
         "kind: reply or submission, sources: source/page references}. Time uses "
-        "Asia/Hong_Kong; use null if no time is printed, never invent 23:59. "
-        "Use null for primary_deadline if no unambiguous deadline is stated; "
+        "Asia/Hong_Kong; preserve the system time, never invent a time. "
+        "Use null for primary_deadline only when the system reply deadline is missing; "
         "conflicting document deadlines belong in questions. A non-null deadline "
         "MUST have at least one source and appear consistently in dates and actions. "
         "Format dates in summary prose for people, not raw ISO timestamps. "
@@ -601,13 +628,14 @@ class AnalysisManager:
             metadata={
                 "title": notice.title,
                 "issued_at": notice.issued_at.isoformat() if notice.issued_at else None,
+                "deadline": notice.deadline.isoformat() if notice.deadline else None,
                 "timezone": "Asia/Hong_Kong",
             },
         )
         result = {
             "status": "partial" if missing else "completed",
             "summary": {key: summary[key] for key in SECTIONS},
-            "primary_deadline": summary.get("primary_deadline"),
+            "primary_deadline": system_reply_deadline(notice),
             "missing": missing,
             "sources": sources,
             "created_at": time.time(),

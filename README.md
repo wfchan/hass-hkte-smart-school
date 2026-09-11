@@ -44,9 +44,9 @@ summary sensors, deadline calendars and a new-item event entity.
 
 摘要以繁體中文提供內容重點、重要日期、費用、家長待辦及需確認事項。每次最多 10 個附件、40 MiB 及 20 頁；損壞、加密或不支援檔案會列明遺漏。摘要只在 Home Assistant 本機保留 30 天（最多 200 份），不寫入 Recorder；原檔只在處理期間暫存。
 
-通告卡的截止日期只來自 AI 對正文及附件的分析：優先顯示明確的回覆期限，其次為交件期限，活動日期不作截止日期。只有日期時不會補上時間。未分析、舊摘要缺少日期欄位或分析不完整時會顯示提示；舊摘要可按「重新分析」更新。原有日曆仍使用 HKTE 提供的日期。
+通告卡的回覆限期以 HKTE 系統設定為準，不受 AI 分析狀態影響。若 PDF 或正文日期不同，AI 摘要會提示差異並以系統日期為準；活動及交件日期另外列出。系統沒有提供回覆限期時會明確顯示未提供。舊摘要可按「重新分析」套用此規則。
 
-The card deadline comes only from AI analysis of the notice body and attachments: an explicit reply deadline takes priority, followed by a submission deadline. Event dates are excluded and date-only deadlines have no invented time. Pending, legacy and incomplete analyses show a status instead. Use Analyze again to extract a deadline for an older summary. Existing calendars continue to use HKTE dates.
+The card uses the HKTE system's configured reply deadline, regardless of AI analysis status. When the PDF or body differs, AI summaries flag the discrepancy and give precedence to the system date. Event and submission dates remain separate. Missing system deadlines are shown as not provided. Analyze older summaries again to apply this rule.
 
 ### 私隱及支援
 
