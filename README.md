@@ -6,6 +6,48 @@ An unofficial, read-only Home Assistant integration for the HKTE Smart School
 parent app. It exposes a device for each child with notice, message and homework
 summary sensors, deadline calendars and a new-item event entity.
 
+## 繁體中文說明
+
+這是一個非官方、唯讀的 Home Assistant 整合，連接 HKTE Smart School 家長應用程式。每位子女會建立一個裝置，提供通告、訊息及功課摘要感測器、截止日期日曆及新項目事件。專案與 HKTE 或 HKT Education 沒有關聯、授權或支援關係，所使用的非公開介面可能隨時變更。
+
+### 功能
+
+- 未讀及未回覆通告數量，以及通告正文
+- 未讀訊息數量
+- 未提交、逾期及緊急功課數量
+- 下一份功課截止時間感測器
+- 唯讀通告及功課截止日期日曆
+- `notice`、`message` 及 `homework` 新項目事件
+- 英文及繁體中文翻譯、設定流程及重新驗證
+- 5 至 60 分鐘更新間隔（預設 15 分鐘）
+- 每個檔案最多 20 MiB 的驗證附件下載
+- 通告正文及 PDF/JPEG/PNG 附件的手動 AI 摘要
+- 可選的新增通告 FIFO 自動 AI 分析，同一帳戶一次只處理一份
+
+整合不會標記已讀、簽署通告、提交功課、付款或呼叫其他寫入端點；定時輪詢也不會下載附件或呼叫 AI。
+
+### 使用 HACS 安裝
+
+上方的 HACS 按鈕可直接開啟此整合的安裝頁。也可在 HACS 的 **Integrations > Custom repositories** 加入 `https://github.com/wfchan/hass-hkte-smart-school`，下載 **HKTE Smart School** 後重新啟動 Home Assistant，再到 **設定 > 裝置與服務** 加入整合。每個 Home Assistant 只可設定一個 HKTE 帳戶。
+
+### 通告正文及卡片
+
+每位子女的 **Notice content** 感測器會在 `notices` 屬性提供最多 20 份最新通告，包含標題、純文字正文、日期及已讀/回覆狀態。建議另外從 HACS 安裝 [HKTE Smart School Notices Card](https://github.com/wfchan/hass-hkte-smart-school-card)（類別 **Plugin**），再加入 `custom:hkte-notices-card`。卡片會自動尋找所有子女，預設顯示五份通告並展開最新一份，也支援篩選、附件 metadata、下載及 AI 分析。
+
+正文上限為 20,000 個字元；HTML 會轉為純文字，附件 metadata 只包括 ID、檔名、MIME 類型及大小。閱讀或展開不會改變 HKTE 狀態。
+
+### 附件下載及 AI 摘要
+
+附件下載使用 Home Assistant 登入及實體讀取權限，伺服器會驗證通告/附件歸屬、取得 `uHubSid` 並拒絕轉址、空回應及錯誤頁面。每個檔案上限 20 MiB，URL、cookie 及 session token 不會傳到瀏覽器。
+
+在整合選項啟用 AI，輸入 Base URL、API key 及支援圖片的模型。下載不需要啟用 AI。**目前只測試及支援 MiniMax-M3**；其他 OpenAI-compatible model 尚未測試，日後會逐步驗證。按「AI 整理重點」才會手動分析；如開啟自動分析，新通告會 FIFO 逐份處理，首次同步只建立基線。
+
+摘要以繁體中文提供內容重點、重要日期、費用、家長待辦及需確認事項。每次最多 10 個附件、40 MiB 及 20 頁；損壞、加密或不支援檔案會列明遺漏。摘要只在 Home Assistant 本機保留 30 天（最多 200 份），不寫入 Recorder；原檔只在處理期間暫存。
+
+### 私隱及支援
+
+登入資料及 AI key 儲存在 Home Assistant 標準 config-entry storage，請保護 `.storage`、備份及管理員權限。日誌及 diagnostics 不包含憑證、cookie、子女姓名、學校名稱或通告正文。最低支援 Home Assistant **2026.8.0**；問題請使用 [GitHub Issues](https://github.com/wfchan/hass-hkte-smart-school/issues)，不要附上私人資料。
+
 > [!IMPORTANT]
 > This community project is not affiliated with, endorsed by or supported by
 > HKTE or HKT Education. It uses an undocumented interface used by the parent
