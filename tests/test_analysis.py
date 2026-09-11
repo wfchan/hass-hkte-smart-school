@@ -277,6 +277,59 @@ async def test_ai_request_has_no_hkte_auth_and_validates_json(hass, aiohttp_serv
     assert result == summary()
 
 
+async def test_ai_receives_system_dates_separately_from_document(
+    hass, aiohttp_server, socket_enabled
+):
+    metadata = {
+        "title": "School activity",
+        "issued_at": "2026-10-01T09:00:00+08:00",
+        "deadline": "2026-10-07T23:59:00+08:00",
+        "timezone": "Asia/Hong_Kong",
+    }
+
+    async def handler(request):
+        payload = await request.json()
+        supplied = json.loads(payload["messages"][1]["content"][0]["text"])
+        assert supplied["hkte_metadata"] == metadata
+        assert supplied["notice"] == "Attachment reply deadline: October 1"
+        prompt = payload["messages"][0]["content"]
+        assert "report BOTH dates" in prompt
+        assert "Do not silently replace" in prompt
+        return web.json_response(
+            {"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(summary())}}]}
+        )
+
+    app = web.Application()
+    app.router.add_post("/chat/completions", handler)
+    server = await aiohttp_server(app)
+    options = OPTIONS | {"ai_base_url": str(server.make_url("/")).rstrip("/")}
+    await mod.analyze(
+        hass,
+        options,
+        "Attachment reply deadline: October 1",
+        [{"attachment_id": "attachment-1", "page": 1}],
+        ["data:image/jpeg;base64,fixture"],
+        metadata=metadata,
+    )
+
+
+async def test_analysis_manager_passes_notice_dates(hass, snapshot):
+    manager = mod.AnalysisManager(hass, "date-context", SimpleNamespace(), OPTIONS)
+    notice = snapshot.children[0].notices[0]
+    with (
+        patch.object(mod, "async_download", AsyncMock(return_value=image_file())),
+        patch.object(mod, "analyze", AsyncMock(return_value=summary())) as analyze,
+    ):
+        manager.start("child-1", notice)
+        await manager.task
+        metadata = analyze.call_args.kwargs["metadata"]
+        assert metadata["deadline"] == notice.deadline.isoformat()
+        assert metadata["issued_at"] == notice.issued_at.isoformat()
+        assert metadata["title"] == notice.title
+        assert set(metadata) == {"title", "issued_at", "deadline", "timezone"}
+    await manager.async_close()
+
+
 @pytest.mark.parametrize(
     "kind,error",
     [

@@ -198,12 +198,17 @@ async def analyze(
     body: str,
     sources: list[dict[str, Any]],
     images: list[str],
+    *,
+    metadata: Mapping[str, str | None] | None = None,
 ) -> dict[str, Any]:
     """Use a separate HA session; HKTE authentication never reaches the AI provider."""
     content: list[dict[str, Any]] = [
         {
             "type": "text",
-            "text": json.dumps({"notice": body, "sources": sources}, ensure_ascii=False),
+            "text": json.dumps(
+                {"notice": body, "sources": sources, "hkte_metadata": metadata},
+                ensure_ascii=False,
+            ),
         }
     ]
     image_sources = [s for s in sources if s["page"] > 0]
@@ -224,6 +229,17 @@ async def analyze(
         "Cite provided source IDs and exact page numbers for factual statements. "
         "Use page 0 ONLY for attachment_id notice; images use their supplied page numbers "
         "starting at 1. Include EVERY explicitly stated event date, time, reply deadline, "
+        "and submission date, keeping their purposes distinct. hkte_metadata contains "
+        "the HKTE system notice title, issued_at, deadline and timezone; cite it as "
+        "attachment_id notice, page 0. Include a provided system deadline in dates, "
+        "explicitly labelled HKTE 系統截止時間. The issued_at is NOT a reply deadline. "
+        "If an attachment/body deadline differs from the HKTE system deadline for "
+        "the same purpose, report BOTH dates with their source labels in dates and "
+        "explicitly flag the conflict in questions, asking parents to confirm with "
+        "the school. Do not silently replace either date or decide which is correct. "
+        "Do not present either conflicting date as an unqualified instruction in "
+        "actions or highlights. Distinct activity/submission dates are not conflicts. "
+        "Also include every explicitly stated "
         "fee, and required item/action. Do not invent payment methods or reply mechanisms. "
         "Missing-information statements may have no sources. Use plain text, not Markdown, "
         "HTML, code fences or reasoning. Maximum 20 items per section, 2000 characters "
@@ -501,7 +517,19 @@ class AnalysisManager:
         if notice.attachments and not images:
             raise AttachmentError("all_attachments_failed")
         self.progress.update(stage="analyzing")
-        summary = await analyze(self.hass, self.options, notice.content, sources, images)
+        summary = await analyze(
+            self.hass,
+            self.options,
+            notice.content,
+            sources,
+            images,
+            metadata={
+                "title": notice.title,
+                "issued_at": notice.issued_at.isoformat() if notice.issued_at else None,
+                "deadline": notice.deadline.isoformat() if notice.deadline else None,
+                "timezone": "Asia/Hong_Kong",
+            },
+        )
         result = {
             "status": "partial" if missing else "completed",
             "summary": summary,

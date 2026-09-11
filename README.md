@@ -44,6 +44,10 @@ summary sensors, deadline calendars and a new-item event entity.
 
 摘要以繁體中文提供內容重點、重要日期、費用、家長待辦及需確認事項。每次最多 10 個附件、40 MiB 及 20 頁；損壞、加密或不支援檔案會列明遺漏。摘要只在 Home Assistant 本機保留 30 天（最多 200 份），不寫入 Recorder；原檔只在處理期間暫存。
 
+分析會同時提供 HKTE 系統截止時間及附件內容。若同一用途的日期不一致，AI 會被要求列明兩個來源並提示向學校確認，不會將活動或交件日期強行改成系統截止時間。舊摘要可按「重新分析」更新。
+
+Analysis includes the HKTE system deadline alongside document content. If dates for the same purpose conflict, the model is instructed to identify both sources and ask parents to confirm with the school. Activity and submission dates remain separate. Use Analyze again to update an existing summary with this context.
+
 ### 私隱及支援
 
 登入資料及 AI key 儲存在 Home Assistant 標準 config-entry storage，請保護 `.storage`、備份及管理員權限。日誌及 diagnostics 不包含憑證、cookie、子女姓名、學校名稱或通告正文。最低支援 Home Assistant **2026.8.0**；問題請使用 [GitHub Issues](https://github.com/wfchan/hass-hkte-smart-school/issues)，不要附上私人資料。
