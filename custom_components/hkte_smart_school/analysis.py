@@ -115,12 +115,44 @@ def api_endpoint(base: str) -> str:
 
 
 def fingerprint(notice: Notice, options: Mapping[str, Any]) -> str:
+    """Track summary inputs, not read/reply activity in the school app."""
+    source = asdict(notice)
+    source.pop("unread")
+    source.pop("replied")
     data = {
-        "notice": asdict(notice),
+        "notice": source,
         "model": options.get("ai_model"),
         "base": options.get("ai_base_url"),
     }
-    return hashlib.sha256(json.dumps(data, sort_keys=True, default=str).encode()).hexdigest()
+    return (
+        "v2:" + hashlib.sha256(json.dumps(data, sort_keys=True, default=str).encode()).hexdigest()
+    )
+
+
+def summary_matches(saved: dict[str, Any], notice: Notice, options: Mapping[str, Any]) -> bool:
+    """Upgrade a legacy hash only when every summary input still matches.
+
+    Old hashes included nullable read/reply flags. Try their nine possible
+    combinations without discarding genuine content or model changes.
+    """
+    current = fingerprint(notice, options)
+    previous = saved.get("fingerprint")
+    if previous == current:
+        return True
+    if not isinstance(previous, str) or previous.startswith("v2:"):
+        return False
+    source = asdict(notice)
+    data = {"notice": source, "model": options.get("ai_model"), "base": options.get("ai_base_url")}
+    for unread in (True, False, None):
+        for replied in (True, False, None):
+            source.update(unread=unread, replied=replied)
+            legacy = hashlib.sha256(
+                json.dumps(data, sort_keys=True, default=str).encode()
+            ).hexdigest()
+            if previous == legacy:
+                saved["fingerprint"] = current
+                return True
+    return False
 
 
 def validate_summary(value: Any, sources: list[dict[str, Any]]) -> dict[str, Any]:
@@ -304,7 +336,7 @@ class AnalysisManager:
             if notice is None or key == self.active_key or key in self._queued_keys:
                 continue
             existing = self.results.get(key)
-            if existing and existing.get("fingerprint") == fingerprint(notice, self.options):
+            if existing and summary_matches(existing, notice, self.options):
                 continue
             if len(self._queue) >= MAX_AUTO_QUEUE:
                 _LOGGER.warning("Automatic HKTE notice analysis queue is full; skipping new item")
@@ -368,8 +400,9 @@ class AnalysisManager:
             saved = None
         result = {"enabled": self.enabled, "status": "idle"}
         if saved:
+            stale = not summary_matches(saved, notice, self.options)
             result.update(saved)
-            result["stale"] = saved["fingerprint"] != fingerprint(notice, self.options)
+            result["stale"] = stale
         if self.active_key == key:
             result.update(self.progress)
         return result

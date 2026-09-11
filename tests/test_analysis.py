@@ -1,9 +1,10 @@
 """On-demand AI work, source validation, failures and storage lifecycle."""
 
 import asyncio
+import hashlib
 import json
 import time
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -23,6 +24,46 @@ OPTIONS = {
     "ai_model": "fixture-vision",
     "ai_api_key": "fixture-key",
 }
+
+
+@pytest.mark.parametrize("unread", [True, False, None])
+@pytest.mark.parametrize("replied", [True, False, None])
+async def test_read_reply_changes_preserve_legacy_summary(hass, snapshot, unread, replied):
+    notice = snapshot.children[0].notices[0]
+    legacy = hashlib.sha256(
+        json.dumps(
+            {
+                "notice": asdict(notice),
+                "model": OPTIONS["ai_model"],
+                "base": OPTIONS["ai_base_url"],
+            },
+            sort_keys=True,
+            default=str,
+        ).encode()
+    ).hexdigest()
+    manager = mod.AnalysisManager(hass, "legacy-status", SimpleNamespace(), OPTIONS)
+    manager.results[json.dumps(["child-1", notice.id])] = {
+        "fingerprint": legacy,
+        "created_at": time.time(),
+        "status": "completed",
+        "summary": summary(),
+    }
+    changed = replace(notice, unread=unread, replied=replied)
+    assert not manager.status("child-1", changed)["stale"]
+    assert manager.start("child-1", changed)["status"] == "completed"
+    assert manager.task is None
+    await manager.async_prune()
+    restored = mod.AnalysisManager(hass, "legacy-status", SimpleNamespace(), OPTIONS)
+    await restored.async_initialize()
+    assert not restored.status("child-1", changed)["stale"]
+    assert restored.status("child-1", replace(changed, content="changed"))["stale"]
+    assert restored.status("child-1", replace(changed, title="changed"))["stale"]
+    modified = replace(changed.attachments[0], filename="updated.pdf")
+    assert restored.status("child-1", replace(changed, attachments=(modified,)))["stale"]
+    restored.options = {**OPTIONS, "ai_model": "another-model"}
+    assert restored.status("child-1", changed)["stale"]
+    await restored.async_close()
+    await manager.async_close()
 
 
 def _snapshot_with_notices(snapshot, count: int) -> AccountSnapshot:
