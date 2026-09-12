@@ -168,6 +168,10 @@ class HkteNoticeContentSensor(HkteChildEntity, SensorEntity):
             reverse=True,
         )
         return {
+            "signing_enabled": bool(
+                self.coordinator.config_entry
+                and self.coordinator.config_entry.options.get("signing_enabled")
+            ),
             "notices": [
                 {
                     "id": item.id,

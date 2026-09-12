@@ -149,6 +149,7 @@ async def test_options_flow_sets_update_interval(hass):
         CONF_UPDATE_INTERVAL: 30,
         "ai_enabled": False,
         "ai_auto_enabled": False,
+        "signing_enabled": False,
     }
 
 
@@ -224,3 +225,46 @@ async def test_ai_options_retain_secret_without_prefilling(hass):
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"]["ai_api_key"] == "fixture-key"
+
+
+@pytest.mark.parametrize(
+    "values,error",
+    [
+        ({"signing_enabled": True}, "signing_required"),
+        (
+            {
+                "signing_enabled": True,
+                "message_hub_api_key": "fixture",
+                "message_hub_url": "http://hub.example",
+            },
+            "invalid_hub_url",
+        ),
+    ],
+)
+async def test_signing_options_validation(hass, values, error):
+    entry = MockConfigEntry(domain=DOMAIN, data={})
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_UPDATE_INTERVAL: 15, **values}
+    )
+    assert result["errors"] == {"base": error}
+
+
+async def test_signing_key_is_not_prefilled_and_retained_when_blank(hass):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={},
+        options={
+            "signing_enabled": True,
+            "message_hub_url": "https://hub.example",
+            "message_hub_api_key": "private-fixture",
+        },
+    )
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert "private-fixture" not in str(result["data_schema"])
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {CONF_UPDATE_INTERVAL: 15, "message_hub_api_key": ""}
+    )
+    assert result["data"]["message_hub_api_key"] == "private-fixture"

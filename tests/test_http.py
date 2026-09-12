@@ -79,3 +79,28 @@ async def test_unavailable_and_wrong_notice(hass_client, setup_notice):
     entry.runtime_data.coordinator.last_update_success = False
     assert (await client.get(path + "/analysis")).status == 503
     assert (await client.get(path + "/attachment/attachment-1")).status == 503
+
+
+async def test_signing_requires_control_confirmation_and_membership(hass_client, setup_notice):
+    from .test_signing import BODY
+
+    entry, path = setup_notice
+    client = await hass_client()
+    signing = entry.runtime_data.signing
+    assert await (await client.get(path + "/reply-form")).json() == {"enabled": False}
+    with patch.object(signing, "submit", AsyncMock(return_value={"status": "unknown"})) as submit:
+        with patch(
+            "homeassistant.auth.permissions.PolicyPermissions.check_entity",
+            side_effect=lambda entity, policy: policy == "read",
+        ):
+            assert (await client.post(path + "/sign", json=BODY)).status == 403
+            assert (await client.post(path + "/sign-status", json={})).status == 403
+            submit.assert_not_called()
+        assert (
+            await client.post(path.replace("notice-1", "wrong") + "/sign", json=BODY)
+        ).status == 404
+        submit.assert_not_called()
+    assert (await client.post(path + "/sign", json=BODY | {"confirmed": False})).status == 409
+    anonymous = await hass_client(None)
+    for route in ("/reply-form", "/sign", "/sign-status"):
+        assert (await anonymous.post(path + route, json=BODY)).status in {401, 405}

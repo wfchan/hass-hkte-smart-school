@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
 
 from aiohttp import web
-from homeassistant.auth.permissions.const import POLICY_READ
+from homeassistant.auth.permissions.const import POLICY_CONTROL, POLICY_READ
 from homeassistant.components.http.const import KEY_HASS_USER
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
@@ -17,6 +17,7 @@ from .api import HkteError
 from .attachments import AttachmentError, async_download
 from .const import DOMAIN
 from .models import ChildSnapshot, Notice
+from .signing import SigningError
 
 if TYPE_CHECKING:
     from . import HkteRuntimeData
@@ -113,4 +114,67 @@ class AnalysisView(HomeAssistantView):
             result = runtime.analysis.start(child.id, notice, body.get("force", False))
         except AttachmentError as err:
             return self.json({"error": str(err)}, status_code=409)
+        return self.json(result, headers={"Cache-Control": "no-store"})
+
+
+class ReplyFormView(HomeAssistantView):
+    """Opening the form never marks read or signs the notice."""
+
+    url = "/api/hkte_smart_school/notice/{entity_id}/{notice_id}/reply-form"
+    name = "api:hkte_smart_school:reply-form"
+    requires_auth = True
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self.hass = hass
+
+    async def get(self, request: web.Request, entity_id: str, notice_id: str) -> web.Response:
+        runtime, child, notice = resolve(self.hass, request, entity_id, notice_id)
+        if not request[KEY_HASS_USER].permissions.check_entity(entity_id, POLICY_CONTROL):
+            raise web.HTTPForbidden
+        try:
+            result = await runtime.signing.form(child.id, notice.id)
+        except SigningError as err:
+            return self.json({"error": str(err)}, status_code=409)
+        return self.json(result, headers={"Cache-Control": "no-store"})
+
+
+class SignView(ReplyFormView):
+    """Submit only user-reviewed answers with entity control permission."""
+
+    url = "/api/hkte_smart_school/notice/{entity_id}/{notice_id}/sign"
+    name = "api:hkte_smart_school:sign"
+
+    async def post(self, request: web.Request, entity_id: str, notice_id: str) -> web.Response:
+        runtime, child, notice = resolve(self.hass, request, entity_id, notice_id)
+        if not request[KEY_HASS_USER].permissions.check_entity(entity_id, POLICY_CONTROL):
+            raise web.HTTPForbidden
+        try:
+            body = await request.json()
+        except ValueError:
+            raise web.HTTPBadRequest from None
+        try:
+            result = await runtime.signing.submit(child.id, notice.id, body)
+        except SigningError as err:
+            return self.json({"error": str(err)}, status_code=409)
+        if result["status"] == "succeeded":
+            self.hass.async_create_task(runtime.coordinator.async_request_refresh())
+        return self.json(result, headers={"Cache-Control": "no-store"})
+
+
+class SignStatusView(ReplyFormView):
+    """Explicit reconciliation of an uncertain operation, with the original UUID."""
+
+    url = "/api/hkte_smart_school/notice/{entity_id}/{notice_id}/sign-status"
+    name = "api:hkte_smart_school:sign-status"
+
+    async def post(self, request: web.Request, entity_id: str, notice_id: str) -> web.Response:
+        runtime, child, notice = resolve(self.hass, request, entity_id, notice_id)
+        if not request[KEY_HASS_USER].permissions.check_entity(entity_id, POLICY_CONTROL):
+            raise web.HTTPForbidden
+        try:
+            result = await runtime.signing.reconcile(child.id, notice.id)
+        except SigningError as err:
+            return self.json({"error": str(err)}, status_code=409)
+        if result["status"] == "succeeded":
+            self.hass.async_create_task(runtime.coordinator.async_request_refresh())
         return self.json(result, headers={"Cache-Control": "no-store"})

@@ -19,7 +19,8 @@ from .const import (
     PLATFORMS,
 )
 from .coordinator import HkteDataUpdateCoordinator
-from .http import AnalysisView, AttachmentView
+from .http import AnalysisView, AttachmentView, ReplyFormView, SignStatusView, SignView
+from .signing import SigningManager
 
 
 @dataclass(slots=True)
@@ -29,6 +30,7 @@ class HkteRuntimeData:
     coordinator: HkteDataUpdateCoordinator
     client: HkteClient
     analysis: AnalysisManager
+    signing: SigningManager
 
 
 type HkteConfigEntry = ConfigEntry[HkteRuntimeData]
@@ -52,7 +54,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: HkteConfigEntry) -> bool
     await coordinator.async_config_entry_first_refresh()
     analysis = AnalysisManager(hass, entry.entry_id, client, entry.options)
     await analysis.async_initialize()
-    entry.runtime_data = HkteRuntimeData(coordinator, client, analysis)
+    signing = SigningManager(hass, entry.entry_id, entry.options)
+    await signing.async_initialize()
+    entry.runtime_data = HkteRuntimeData(coordinator, client, analysis, signing)
 
     @callback
     def _async_auto_analyze() -> None:
@@ -66,6 +70,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: HkteConfigEntry) -> bool
     if not hass.data.get("hkte_smart_school_http"):
         hass.http.register_view(AttachmentView(hass))
         hass.http.register_view(AnalysisView(hass))
+        hass.http.register_view(ReplyFormView(hass))
+        hass.http.register_view(SignView(hass))
+        hass.http.register_view(SignStatusView(hass))
         hass.data["hkte_smart_school_http"] = True
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
     await hass.config_entries.async_forward_entry_setups(

@@ -2,13 +2,13 @@
 
 <img src="custom_components/hkte_smart_school/brand/icon.png" alt="Unofficial HKTE Smart School integration icon" width="96" height="96">
 
-An unofficial, read-only Home Assistant integration for the HKTE Smart School
+An unofficial Home Assistant integration for the HKTE Smart School
 parent app. It exposes a device for each child with notice, message and homework
 summary sensors, deadline calendars and a new-item event entity.
 
 ## 繁體中文說明
 
-這是一個非官方、唯讀的 Home Assistant 整合，連接 HKTE Smart School 家長應用程式。每位子女會建立一個裝置，提供通告、訊息及功課摘要感測器、截止日期日曆及新項目事件。專案與 HKTE 或 HKT Education 沒有關聯、授權或支援關係，所使用的非公開介面可能隨時變更。
+這是一個非官方 Home Assistant 整合，連接 HKTE Smart School 家長應用程式。每位子女會建立一個裝置，提供通告、訊息及功課摘要感測器、截止日期日曆及新項目事件；可選擇啟用經確認的通告簽署。專案與 HKTE 或 HKT Education 沒有關聯、授權或支援關係，所使用的非公開介面可能隨時變更。
 
 ### 功能
 
@@ -24,7 +24,23 @@ summary sensors, deadline calendars and a new-item event entity.
 - 通告正文及 PDF/JPEG/PNG 附件的手動 AI 摘要
 - 可選的新增通告 FIFO 自動 AI 分析，同一帳戶一次只處理一份
 
-整合不會標記已讀、簽署通告、提交功課、付款或呼叫其他寫入端點；定時輪詢也不會下載附件或呼叫 AI。
+背景同步維持唯讀，不會標記已讀、簽署、提交功課或付款。簽署功能預設關閉，只有使用者確認回覆後才會透過 Message Hub 提交。
+
+### 通告簽署（可選）
+
+在整合選項啟用通告簽署，填寫 Message Hub 的 HTTPS 網址及專用 HKTE API key（不是 HKTE 密碼）。Message Hub 必須同步相同 HKTE 帳戶的子女和通告，並支援 `reply-form`、`sign` 及持久化操作查核 API。搭配卡片 v0.3.0 或更新版本使用。
+
+可簽署時卡片顯示「簽署通告」。請閱讀表格、親自選擇答案，再檢查回覆及確認簽署。支援知悉、單選、多選、文字、數量及條件題；不預選答案或由 AI 代答。付款、上傳、特殊或過期表格按 API 規則阻擋，請使用官方 App。簽署後無法在此撤銷或修改。
+
+HA 登入及實體控制權限都必須通過驗證。API key 只留在後端；為防止重複提交，確認的答案、備註及操作 UUID 會先寫入本機私人 Store。結果不明時保留原操作，至少等候五分鐘後按「檢查結果」，不建立新簽署。最多保留 500 筆記錄，達上限時阻止新增操作；請保護 `.storage` 及備份。
+
+### Optional notice signing
+
+Enable signing in the integration options and enter your Message Hub HTTPS origin and dedicated HKTE API key. Message Hub must synchronize the same HKTE child and notice IDs and support the reply-form/sign/operation APIs. Requires card v0.3.0 or later.
+
+The card offers **Sign notice** only when the API allows it. Read the form, select your own answers, review them and explicitly confirm. Acknowledgement, single/multiple choice, text, quantities and conditional questions are supported. No answer is selected by default or by AI. Unsupported/payment/upload/expired forms are handled in the official app. Signing cannot be undone or edited here; opening a form never signs or marks it read.
+
+Signing requires HA authentication and entity control permission. The backend privately stores the exact approved answers, comment and UUID before sending. Uncertain results retain the same operation; wait at least five minutes before **Check result**. A new UUID is never generated to retry an uncertain write. Storage is capped at 500 records and blocks new operations when full. Protect `.storage` and backups; signing data and keys are excluded from logs, diagnostics and Recorder. Background synchronization remains read-only.
 
 ### 使用 HACS 安裝
 
@@ -72,7 +88,7 @@ The card uses the HKTE system's configured reply deadline, regardless of AI anal
 - Optional AI summaries of notice text and PDF/JPEG/PNG attachments
 - Optional automatic AI analysis for newly received notices, processed FIFO one at a time
 
-The integration never marks an item as read, signs a notice, submits homework,
+Background synchronization never marks an item as read, signs a notice, submits homework,
 makes a payment or calls another state-changing endpoint. For notices that
 advertise attachments, it may read display-safe metadata through
 `GetNoticeData`. Only explicit download or AI-analysis requests retrieve files;
@@ -241,7 +257,7 @@ sequentially and follows at most 200 pages per collection.
 
 ## Privacy and credentials
 
-Home Assistant stores the login name, password and AI API key in its standard config-entry
+Home Assistant stores the login name, password, AI API key and optional Message Hub key in its standard config-entry
 storage. This storage is access-controlled by the Home Assistant host but is
 not separately encrypted. Protect `.storage`, backups and host administrator
 access. Session cookies remain in memory and are not written by this

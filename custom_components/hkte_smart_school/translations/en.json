@@ -33,6 +33,8 @@
   },
   "options": {
     "error": {
+      "signing_required": "Enter the Message Hub HTTPS URL and dedicated HKTE API key.",
+      "invalid_hub_url": "Enter an HTTPS origin without credentials, paths, query parameters or fragments.",
       "ai_required": "Enter the AI Base URL, model and API key.",
       "invalid_ai_url": "Enter a Base URL without credentials, query parameters or fragments."
     },
@@ -45,14 +47,20 @@
           "ai_auto_enabled": "Automatically analyze new notices",
           "ai_base_url": "AI Base URL",
           "ai_model": "Vision model name",
-          "ai_api_key": "AI API key"
+          "ai_api_key": "AI API key",
+          "signing_enabled": "Enable confirmed notice signing via Message Hub",
+          "message_hub_url": "Message Hub URL",
+          "message_hub_api_key": "Message Hub HKTE API key"
         },
         "data_description": {
           "update_interval": "Minutes between updates (5-60)",
           "ai_enabled": "Analysis sends notice text and attachment pages to your configured AI provider. Summaries are stored locally for 30 days.",
           "ai_auto_enabled": "Queue new notices for one-at-a-time AI analysis. The first sync creates a baseline and does not analyze existing notices.",
           "ai_base_url": "OpenAI-compatible base URL including /v1 where required; use HTTPS for remote providers.",
-          "ai_api_key": "Leave blank to keep the saved key."
+          "ai_api_key": "Leave blank to keep the saved key.",
+          "signing_enabled": "Adds reply forms to the card. Only your final confirmation signs the real HKTE notice. Background updates remain read-only.",
+          "message_hub_url": "Message Hub must synchronize the same HKTE child and notice IDs. Use its public HTTPS origin.",
+          "message_hub_api_key": "Dedicated Message Hub HKTE key, not your HKTE password. Leave blank to keep the saved key."
         }
       }
     }

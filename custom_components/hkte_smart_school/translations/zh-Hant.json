@@ -33,6 +33,8 @@
   },
   "options": {
     "error": {
+      "signing_required": "請填寫 Message Hub HTTPS 網址及專用 HKTE API key。",
+      "invalid_hub_url": "請填寫 HTTPS 網址，不含登入資料、路徑、查詢參數或 fragment。",
       "ai_required": "請填寫 AI Base URL、模型名稱及 API key。",
       "invalid_ai_url": "請填寫不含登入資料、查詢參數或 fragment 的 Base URL。"
     },
@@ -45,14 +47,20 @@
           "ai_auto_enabled": "收到新通告時自動進行 AI 分析",
           "ai_base_url": "AI Base URL",
           "ai_model": "視覺模型名稱",
-          "ai_api_key": "AI API key"
+          "ai_api_key": "AI API key",
+          "signing_enabled": "啟用經確認的通告簽署（Message Hub）",
+          "message_hub_url": "Message Hub 網址",
+          "message_hub_api_key": "Message Hub HKTE API key"
         },
         "data_description": {
           "update_interval": "兩次更新之間的分鐘數（5 至 60）",
           "ai_enabled": "分析時會將通告文字及附件頁面傳送至你設定的 AI 服務。摘要在本機保存 30 天。",
           "ai_auto_enabled": "新通告會排隊逐份分析；首次同步只建立基線，不會分析現有通告。",
           "ai_base_url": "OpenAI 相容服務網址，按服務需要包括 /v1；遠端服務請使用 HTTPS。",
-          "ai_api_key": "留空以保留已儲存的金鑰。"
+          "ai_api_key": "留空以保留已儲存的金鑰。",
+          "signing_enabled": "在卡片加入回覆表格，只有最後確認才會簽署真實 HKTE 通告。背景更新仍為唯讀。",
+          "message_hub_url": "Message Hub 必須同步相同 HKTE 子女及通告 ID。請使用公開 HTTPS 網址。",
+          "message_hub_api_key": "Message Hub 專用 HKTE 金鑰，並非 HKTE 登入密碼。留空保留已儲存的金鑰。"
         }
       }
     }

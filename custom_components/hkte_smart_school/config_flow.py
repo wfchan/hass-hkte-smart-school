@@ -34,6 +34,7 @@ from .const import (
     MAX_UPDATE_INTERVAL_MINUTES,
     MIN_UPDATE_INTERVAL_MINUTES,
 )
+from .signing import hub_origin
 
 
 async def _async_validate(hass: HomeAssistant, login_name: str, password: str) -> str:
@@ -140,6 +141,18 @@ class HkteOptionsFlow(config_entries.OptionsFlow):
             values = dict(self.config_entry.options) | user_input
             if not user_input.get("ai_api_key") and self.config_entry.options.get("ai_api_key"):
                 values["ai_api_key"] = self.config_entry.options["ai_api_key"]
+            if not user_input.get("message_hub_api_key") and self.config_entry.options.get(
+                "message_hub_api_key"
+            ):
+                values["message_hub_api_key"] = self.config_entry.options["message_hub_api_key"]
+            if values.get("signing_enabled"):
+                if not values.get("message_hub_api_key") or not values.get("message_hub_url"):
+                    errors["base"] = "signing_required"
+                else:
+                    try:
+                        hub_origin(values["message_hub_url"])
+                    except ValueError:
+                        errors["base"] = "invalid_hub_url"
             if values.get("ai_enabled"):
                 if not all(values.get(key) for key in ("ai_base_url", "ai_model", "ai_api_key")):
                     errors["base"] = "ai_required"
@@ -187,6 +200,21 @@ class HkteOptionsFlow(config_entries.OptionsFlow):
                         },
                     ): TextSelector(),
                     vol.Optional("ai_api_key"): TextSelector(
+                        TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                    ),
+                    vol.Optional(
+                        "signing_enabled",
+                        default=self.config_entry.options.get("signing_enabled", False),
+                    ): BooleanSelector(),
+                    vol.Optional(
+                        "message_hub_url",
+                        description={
+                            "suggested_value": self.config_entry.options.get(
+                                "message_hub_url", "https://message-hub.treelansin.uk"
+                            )
+                        },
+                    ): TextSelector(TextSelectorConfig(type=TextSelectorType.URL)),
+                    vol.Optional("message_hub_api_key"): TextSelector(
                         TextSelectorConfig(type=TextSelectorType.PASSWORD)
                     ),
                 }
