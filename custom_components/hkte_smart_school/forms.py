@@ -251,7 +251,7 @@ def build_form(raw: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def validate_reply(
-    raw: Mapping[str, Any], form_version: str, answers: Any, comment: Any
+    raw: Mapping[str, Any], form_version: str, answers: Any
 ) -> dict[str, Any]:
     """Validate UI answers and encode the official SignNotice payload."""
     form = build_form(raw)
@@ -259,7 +259,7 @@ def validate_reply(
         raise FormError("form_changed")
     if not form["can_sign"] or not form["supported"]:
         raise FormError("cannot_sign")
-    if not isinstance(answers, Mapping) or not isinstance(comment, str) or len(comment) > 10000:
+    if not isinstance(answers, Mapping):
         raise FormError("invalid_answers")
     by_id = {question["id"]: question for question in form["questions"]}
     values: dict[str, Any] = {}
@@ -342,8 +342,6 @@ def validate_reply(
         "amount": 0,
         "amount_without_extra_subsidy": 0,
     }
-    if comment:
-        payload["comment"] = comment
     subsidy = raw.get("subsidy_status", -1)
     if subsidy not in (None, -1):
         payload["subsidy_status"] = subsidy

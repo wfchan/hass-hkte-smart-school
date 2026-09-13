@@ -24,15 +24,18 @@ class SigningError(Exception):
 
 
 def validate_submission(value: Any) -> dict[str, Any]:
+    required = {"form_version", "answers", "confirmed"}
+    if isinstance(value, dict) and set(value) == required | {"comment"}:
+        if value["comment"] != "":
+            raise SigningError("invalid_answers")
+        value = {key: item for key, item in value.items() if key != "comment"}
     if (
         not isinstance(value, dict)
-        or set(value) != {"form_version", "answers", "comment", "confirmed"}
+        or set(value) != required
         or value["confirmed"] is not True
         or not isinstance(value["form_version"], str)
         or len(value["form_version"]) != 64
         or not isinstance(value["answers"], dict)
-        or not isinstance(value["comment"], str)
-        or len(value["comment"]) > 10000
     ):
         raise SigningError("invalid_answers")
     return value
@@ -132,9 +135,7 @@ class SigningManager:
                 form = build_form(raw)
                 if form["form_version"] != data["form_version"]:
                     raise FormError("form_changed")
-                payload = validate_reply(
-                    raw, data["form_version"], data["answers"], data["comment"]
-                )
+                payload = validate_reply(raw, data["form_version"], data["answers"])
             except FormError as err:
                 raise SigningError(err.code) from None
             except HkteError:

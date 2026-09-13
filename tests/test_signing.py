@@ -32,7 +32,6 @@ def body() -> dict:
     return {
         "form_version": build_form(RAW)["form_version"],
         "answers": {"main": [1]},
-        "comment": "",
         "confirmed": True,
     }
 
@@ -49,11 +48,33 @@ def client() -> AsyncMock:
 
 
 @pytest.mark.parametrize(
-    "change", [{"confirmed": False}, {"confirmed": 1}, {"answers": []}, {"comment": "x" * 10001}]
+    "change",
+    [
+        {"confirmed": False},
+        {"confirmed": 1},
+        {"answers": []},
+        {"comment": "not in the form"},
+        {"extra": "field"},
+    ],
 )
-def test_confirmation_is_required_and_bounded(change):
+def test_confirmation_and_exact_fields_are_required(change):
     with pytest.raises(SigningError):
         validate_submission(body() | change)
+
+
+def test_legacy_empty_comment_is_ignored():
+    assert validate_submission(body() | {"comment": ""}) == body()
+
+
+def test_schema_text_question_is_preserved_without_global_comment():
+    raw = RAW | {"qtype": "Comment", "options": [], "introduction": "Write a reply"}
+    form = build_form(raw)
+    assert form["questions"][0]["type"] == "text"
+    assert validate_reply(raw, form["form_version"], {"main": "School reply"}) == {
+        "reply": "School reply",
+        "amount": 0,
+        "amount_without_extra_subsidy": 0,
+    }
 
 
 async def test_form_reads_direct_hkte_and_never_writes(hass):
@@ -141,4 +162,4 @@ def test_unsupported_or_unavailable_forms_are_blocked(change):
     form = build_form(raw)
     assert form["can_sign"] is False
     with pytest.raises(FormError):
-        validate_reply(raw, form["form_version"], {"main": [0]}, "")
+        validate_reply(raw, form["form_version"], {"main": [0]})
