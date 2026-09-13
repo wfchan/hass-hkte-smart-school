@@ -38,6 +38,14 @@ type HkteConfigEntry = ConfigEntry[HkteRuntimeData]
 
 async def async_setup_entry(hass: HomeAssistant, entry: HkteConfigEntry) -> bool:
     """Set up HKTE Smart School from a config entry."""
+    # Drop legacy bridge-only options without exposing their values.
+    legacy_options = {
+        key: value
+        for key, value in entry.options.items()
+        if key not in {"message_hub_url", "message_hub_api_key"}
+    }
+    if len(legacy_options) != len(entry.options):
+        hass.config_entries.async_update_entry(entry, options=legacy_options)
     client = HkteClient(
         async_create_clientsession(hass),
         entry.data[CONF_LOGIN_NAME],
@@ -54,7 +62,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: HkteConfigEntry) -> bool
     await coordinator.async_config_entry_first_refresh()
     analysis = AnalysisManager(hass, entry.entry_id, client, entry.options)
     await analysis.async_initialize()
-    signing = SigningManager(hass, entry.entry_id, entry.options)
+    signing = SigningManager(hass, entry.entry_id, entry.options, client)
     await signing.async_initialize()
     entry.runtime_data = HkteRuntimeData(coordinator, client, analysis, signing)
 

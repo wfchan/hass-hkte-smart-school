@@ -88,6 +88,80 @@ class HkteClient:
         async with self.operation_lock:
             return await self._async_fetch_with_retry()
 
+    async def async_notice_detail(self, notice_id: str) -> dict[str, Any]:
+        """Return the authenticated raw detail needed for an explicit reply."""
+        async with self.operation_lock:
+            if not self._authenticated:
+                await self._async_login()
+            try:
+                return (await self._async_call("GetNoticeData", {"nid": notice_id})).get(
+                    "data"
+                ) or {}
+            except _SessionExpiredError:
+                self._authenticated = False
+                await self._async_login()
+                return (await self._async_call("GetNoticeData", {"nid": notice_id})).get(
+                    "data"
+                ) or {}
+
+    async def async_notice_form(self, child_id: str, notice_id: str) -> dict[str, Any]:
+        """Fetch the complete notice record used to build a reply form."""
+        async with self.operation_lock:
+            if not self._authenticated:
+                await self._async_login()
+            try:
+                notices = await self._async_notices(child_id)
+            except _SessionExpiredError:
+                self._authenticated = False
+                await self._async_login()
+                notices = await self._async_notices(child_id)
+            for notice in notices:
+                if str(_first(notice, "nid", "id")) == str(notice_id):
+                    return notice
+            raise HkteResponseError
+
+    async def async_sign_notice(
+        self, child_id: str, notice_id: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Submit an already reviewed reply directly to HKTE."""
+        async with self.operation_lock:
+            if not self._authenticated:
+                await self._async_login()
+            body = {**payload, "user_id": child_id, "nid": notice_id}
+            try:
+                return await self._async_call("SignNotice", body)
+            except _SessionExpiredError:
+                self._authenticated = False
+                await self._async_login()
+                return await self._async_call("SignNotice", body)
+
+    async def async_notice_reply(self, child_id: str, notice_id: str) -> dict[str, Any]:
+        """Read the saved reply without changing HKTE state."""
+        async with self.operation_lock:
+            if not self._authenticated:
+                await self._async_login()
+            body = {"user_id": child_id, "nid": notice_id}
+            try:
+                return self._validated_notice_reply(
+                    (await self._async_call("GetNoticeReply", body)).get("data"), notice_id
+                )
+            except _SessionExpiredError:
+                self._authenticated = False
+                await self._async_login()
+                return self._validated_notice_reply(
+                    (await self._async_call("GetNoticeReply", body)).get("data"), notice_id
+                )
+
+    @staticmethod
+    def _validated_notice_reply(value: Any, notice_id: str) -> dict[str, Any]:
+        """Reject empty or cross-notice reply envelopes before readback."""
+        if not isinstance(value, Mapping) or "reply" not in value:
+            raise HkteResponseError
+        returned_id = _first(value, "nid", "notice_id")
+        if returned_id is not None and str(returned_id) != str(notice_id):
+            raise HkteResponseError
+        return dict(value)
+
     async def _async_fetch_with_retry(self) -> AccountSnapshot:
         if not self._authenticated:
             await self._async_login()

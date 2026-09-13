@@ -227,44 +227,37 @@ async def test_ai_options_retain_secret_without_prefilling(hass):
     assert result["data"]["ai_api_key"] == "fixture-key"
 
 
-@pytest.mark.parametrize(
-    "values,error",
-    [
-        ({"signing_enabled": True}, "signing_required"),
-        (
-            {
-                "signing_enabled": True,
-                "message_hub_api_key": "fixture",
-                "message_hub_url": "http://hub.example",
-            },
-            "invalid_hub_url",
-        ),
-    ],
-)
-async def test_signing_options_validation(hass, values, error):
+async def test_direct_signing_option(hass):
     entry = MockConfigEntry(domain=DOMAIN, data={})
     entry.add_to_hass(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_UPDATE_INTERVAL: 15, **values}
+        result["flow_id"], {CONF_UPDATE_INTERVAL: 15, "signing_enabled": True}
     )
-    assert result["errors"] == {"base": error}
+    assert result["data"]["signing_enabled"] is True
 
 
-async def test_signing_key_is_not_prefilled_and_retained_when_blank(hass):
+async def test_options_remove_legacy_message_hub_values(hass):
     entry = MockConfigEntry(
         domain=DOMAIN,
         data={},
         options={
+            CONF_UPDATE_INTERVAL: 15,
             "signing_enabled": True,
-            "message_hub_url": "https://hub.example",
-            "message_hub_api_key": "private-fixture",
+            "message_hub_url": "https://legacy.example",
+            "message_hub_api_key": "legacy-secret",
         },
     )
     entry.add_to_hass(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    assert "private-fixture" not in str(result["data_schema"])
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_UPDATE_INTERVAL: 15, "message_hub_api_key": ""}
+        result["flow_id"], {CONF_UPDATE_INTERVAL: 15, "signing_enabled": True}
     )
-    assert result["data"]["message_hub_api_key"] == "private-fixture"
+    assert result["data"] == {
+        CONF_UPDATE_INTERVAL: 15,
+        "ai_enabled": False,
+        "ai_auto_enabled": False,
+        "signing_enabled": True,
+    }
+    assert "message_hub_url" not in result["data"]
+    assert "message_hub_api_key" not in result["data"]

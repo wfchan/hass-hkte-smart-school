@@ -189,6 +189,65 @@ async def test_expired_session_reauthenticates_once(aiohttp_server, monkeypatch,
     assert children_count == 2
 
 
+@pytest.mark.asyncio
+async def test_direct_sign_and_reply_use_authenticated_multipart_contract(
+    aiohttp_server, monkeypatch, socket_enabled
+):
+    calls: list[tuple[str, dict]] = []
+
+    async def handler(request: web.Request) -> web.Response:
+        method = request.match_info["method"]
+        reader = await request.multipart()
+        field = await reader.next()
+        assert field is not None
+        payload = json.loads(await field.text())
+        calls.append((method, payload))
+        if method == "Login":
+            response = web.json_response({"success": True, "data": {"user_id": 9}})
+            response.set_cookie("_clms_session", "one")
+            response.set_cookie("_clms_sessionkey", "two")
+            return response
+        assert request.cookies == {"_clms_session": "one", "_clms_sessionkey": "two"}
+        if method == "SignNotice":
+            return web.json_response({"success": True, "data": {"saved": True}})
+        if method == "GetNoticeReply":
+            return web.json_response(
+                {"success": True, "data": {"nid": payload["nid"], "reply": [1]}}
+            )
+        raise AssertionError(method)
+
+    app = web.Application()
+    app.router.add_post("/api/parent3.php/{method}", handler)
+    server = await aiohttp_server(app)
+    monkeypatch.setattr(api, "BASE_URL", str(server.make_url("/")).rstrip("/"))
+
+    async with ClientSession(cookie_jar=CookieJar(unsafe=True)) as session:
+        client = HkteClient(session, "parent", "secret")
+        result = await client.async_sign_notice(
+            "42",
+            "100",
+            {"reply": [1], "amount": 0, "amount_without_extra_subsidy": 0},
+        )
+        reply = await client.async_notice_reply("42", "100")
+
+    assert result["data"] == {"saved": True}
+    assert reply == {"nid": "100", "reply": [1]}
+    assert calls[0][0] == "Login"
+    assert calls[1:] == [
+        (
+            "SignNotice",
+            {
+                "reply": [1],
+                "amount": 0,
+                "amount_without_extra_subsidy": 0,
+                "user_id": "42",
+                "nid": "100",
+            },
+        ),
+        ("GetNoticeReply", {"user_id": "42", "nid": "100"}),
+    ]
+
+
 def test_normalizers_tolerate_dates_booleans_and_invalid_values():
     assert api._as_date_value("2026-09-08") == date(2026, 9, 8)
     assert isinstance(api._as_date_value(1_700_000_000), datetime)

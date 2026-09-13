@@ -24,23 +24,15 @@ summary sensors, deadline calendars and a new-item event entity.
 - 通告正文及 PDF/JPEG/PNG 附件的手動 AI 摘要
 - 可選的新增通告 FIFO 自動 AI 分析，同一帳戶一次只處理一份
 
-背景同步維持唯讀，不會標記已讀、簽署、提交功課或付款。簽署功能預設關閉，只有使用者確認回覆後才會透過 Message Hub 提交。
+背景同步維持唯讀，不會標記已讀、簽署、提交功課或付款。
 
 ### 通告簽署（可選）
 
-在整合選項啟用通告簽署，填寫 Message Hub 的 HTTPS 網址及專用 HKTE API key（不是 HKTE 密碼）。Message Hub 必須同步相同 HKTE 帳戶的子女和通告，並支援 `reply-form`、`sign` 及持久化操作查核 API。搭配卡片 v0.3.0 或更新版本使用。
 
 可簽署時卡片顯示「簽署通告」。請閱讀表格、親自選擇答案，再檢查回覆及確認簽署。支援知悉、單選、多選、文字、數量及條件題；不預選答案或由 AI 代答。付款、上傳、特殊或過期表格按 API 規則阻擋，請使用官方 App。簽署後無法在此撤銷或修改。
 
-HA 登入及實體控制權限都必須通過驗證。API key 只留在後端；為防止重複提交，確認的答案、備註及操作 UUID 會先寫入本機私人 Store。結果不明時保留原操作，至少等候五分鐘後按「檢查結果」，不建立新簽署。最多保留 500 筆記錄，達上限時阻止新增操作；請保護 `.storage` 及備份。
+HA 登入及實體控制權限都必須通過驗證。AI API key 只用於 AI 分析並留在後端；直接簽署不需要另一個 API key。為防止重複提交，確認的答案、備註及操作 UUID 會先寫入本機私人 Store。結果不明時保留原操作，至少等候五分鐘後按「檢查結果」，不建立新簽署。最多保留 500 筆記錄，達上限時阻止新增操作；請保護 `.storage` 及備份。
 
-### Optional notice signing
-
-Enable signing in the integration options and enter your Message Hub HTTPS origin and dedicated HKTE API key. Message Hub must synchronize the same HKTE child and notice IDs and support the reply-form/sign/operation APIs. Requires card v0.3.0 or later.
-
-The card offers **Sign notice** only when the API allows it. Read the form, select your own answers, review them and explicitly confirm. Acknowledgement, single/multiple choice, text, quantities and conditional questions are supported. No answer is selected by default or by AI. Unsupported/payment/upload/expired forms are handled in the official app. Signing cannot be undone or edited here; opening a form never signs or marks it read.
-
-Signing requires HA authentication and entity control permission. The backend privately stores the exact approved answers, comment and UUID before sending. Uncertain results retain the same operation; wait at least five minutes before **Check result**. A new UUID is never generated to retry an uncertain write. Storage is capped at 500 records and blocks new operations when full. Protect `.storage` and backups; signing data and keys are excluded from logs, diagnostics and Recorder. Background synchronization remains read-only.
 
 ### 使用 HACS 安裝
 
@@ -122,7 +114,7 @@ For the recommended dashboard experience, add
 resource. Add `custom:hkte-notices-card` to a dashboard; it discovers every
 child's notice-content sensor automatically, or accepts an explicit `entities`
 list. It supports all/unread filtering, expandable bodies and attachment
-metadata. The current pairing is card **0.2.6** with integration **0.4.5**;
+metadata. The current pairing is card **0.4.0** with integration **0.6.0**;
 automatic analysis of new notices is optional, queued FIFO and silent during the
 first baseline sync.
 The default remains five notices with the latest expanded; existing explicit
@@ -133,6 +125,22 @@ As a dependency-free fallback, add a **Manual** card using
 finds all children and expands the latest notice.
 Reading or expanding a notice never changes its HKTE read/reply status.
 
+## Direct HKTE signing
+
+Enable **direct HKTE notice signing** in the integration options to expose the
+review flow in the companion card. Select answers for every supported question,
+choose **Review reply**, and only then choose **Confirm and sign**. Supported
+forms are acknowledgement, single and multiple choice, text, quantities and
+verified conditional questions. Payment, upload, unknown, nested and expired
+forms remain unavailable and must be completed in the official HKTE app.
+
+The integration stores the reviewed payload in a private local Store before
+calling HKTE. A successful request remains pending for at least five minutes;
+only a later read-only `GetNoticeReply` check can confirm the result. Timeout,
+connection loss or an incomplete response is marked unknown and is never
+resent automatically. Opening the form does not mark a notice read, and the
+card requires entity control permission for all signing endpoints.
+
 Each body is limited to 20,000 characters, with `content_truncated` indicating
 truncation. A missing body is explicitly shown as unavailable. Attachment
 metadata may include only its ID, filename, MIME type and size. Attachment
@@ -142,7 +150,7 @@ content and never loads embedded links or images.
 
 ## Attachment downloads and AI summaries
 
-Install integration **0.4.5** and card **0.2.6** together. The download icon next
+Install integration **0.6.0** and card **0.4.0** together. The download icon next
 to each attachment uses your HA login and entity read permission. The server
 checks notice/attachment ownership, obtains a fresh HKTE `uHubSid`, and requests
 the verified HTTPS storage endpoint with `itemid` and `sid`. URLs, cookies and
@@ -185,7 +193,8 @@ credentials or provider content.
 Select **AI 整理重點** on a notice to send its text, attachment filenames and
 rendered pages to **your configured AI provider**. This explicitly discloses
 private school documents: select a provider whose privacy/retention policy you
-accept. Nothing is sent automatically. Summaries are in Traditional Chinese,
+accept. This is manual unless automatic new-notice analysis is enabled in the
+integration options. Summaries are in Traditional Chinese,
 with highlights, important dates, costs, parent actions, questions and page
 citations. Missing dates/costs must be marked as not provided. Always verify AI
 output against the original; the integration does not pay, reply or submit.
@@ -257,7 +266,7 @@ sequentially and follows at most 200 pages per collection.
 
 ## Privacy and credentials
 
-Home Assistant stores the login name, password, AI API key and optional Message Hub key in its standard config-entry
+Home Assistant stores the login name, password and AI API key in its standard config-entry
 storage. This storage is access-controlled by the Home Assistant host but is
 not separately encrypted. Protect `.storage`, backups and host administrator
 access. Session cookies remain in memory and are not written by this

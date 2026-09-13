@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hass-hkte-smart-school"
-version = "0.5.0"
-description = "Unofficial read-only Home Assistant integration for HKTE Smart School"
+version = "0.6.0"
+description = "Unofficial Home Assistant integration for HKTE Smart School with optional confirmed signing"
 readme = "README.md"
 requires-python = ">=3.14.2"
 license = "MIT"
