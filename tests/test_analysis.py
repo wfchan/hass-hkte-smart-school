@@ -89,46 +89,27 @@ def summary():
 
 
 def ai_answer():
-    return summary() | {"primary_deadline": None}
+    """The five-section object the prompt asks the model for."""
+    return summary()
 
 
-@pytest.mark.parametrize("clock", [None, "12:30"])
-def test_structured_deadline_validated(clock):
+def _envelope(content: object) -> dict:
+    return {"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(content)}}]}
+
+
+def test_ai_answer_accepts_exactly_the_five_sections():
     sources = [{"attachment_id": "attachment-1", "page": 1}]
-    deadline = {"date": "2026-09-11", "time": clock, "kind": "reply", "sources": sources}
+    assert mod.parse_answer(_envelope(summary()), sources) == summary()
+    with pytest.raises(AttachmentError, match="invalid_ai_response"):
+        mod.parse_answer(_envelope(summary() | {"unexpected": []}), sources)
+
+
+def test_retired_deadline_field_is_ignored():
+    """A provider that ignores the schema must not fail the whole summary."""
+    sources = [{"attachment_id": "attachment-1", "page": 1}]
+    deadline = {"date": "2026-09-11", "time": None, "kind": "reply", "sources": sources}
     answer = ai_answer() | {"primary_deadline": deadline}
-    parsed = mod.parse_answer(
-        {"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(answer)}}]},
-        sources,
-    )
-    assert parsed["primary_deadline"] == deadline
-
-
-@pytest.mark.parametrize(
-    "change",
-    [
-        {"date": "2026-02-30"},
-        {"date": "11 Sep"},
-        {"time": "24:00"},
-        {"time": "23:59:00"},
-        {"kind": "event"},
-        {"sources": []},
-        {"sources": [{"attachment_id": "unknown", "page": 1}]},
-    ],
-)
-def test_invalid_deadline_rejected(change):
-    sources = [{"attachment_id": "attachment-1", "page": 1}]
-    deadline = {"date": "2026-09-11", "time": None, "kind": "reply", "sources": sources} | change
-    with pytest.raises(AttachmentError, match="invalid_ai_response"):
-        mod.validate_deadline(deadline, sources)
-
-
-def test_new_ai_response_requires_deadline_field():
-    with pytest.raises(AttachmentError, match="invalid_ai_response"):
-        mod.parse_answer(
-            {"choices": [{"finish_reason": "stop", "message": {"content": json.dumps(summary())}}]},
-            [],
-        )
+    assert mod.parse_answer(_envelope(answer), sources) == summary()
 
 
 def test_missing_system_deadline_has_no_ai_fallback(snapshot):
@@ -146,28 +127,25 @@ def test_date_only_system_deadline_has_no_invented_time(snapshot):
     }
 
 
-async def test_system_deadline_overrides_ai_and_survives_restore(hass, snapshot):
+async def test_stored_deadline_is_the_system_deadline_and_survives_restore(hass, snapshot):
     notice = snapshot.children[0].notices[0]
-    deadline = {
-        "date": "2026-09-11",
-        "time": None,
-        "kind": "reply",
-        "sources": [{"attachment_id": "attachment-1", "page": 1}],
-    }
     manager = mod.AnalysisManager(hass, "ai-deadline", SimpleNamespace(), OPTIONS)
     with (
         patch.object(mod, "async_download", AsyncMock(return_value=image_file())),
-        patch.object(
-            mod, "analyze", AsyncMock(return_value=summary() | {"primary_deadline": deadline})
-        ),
+        patch.object(mod, "analyze", AsyncMock(return_value=summary())),
     ):
         manager.start("child-1", notice)
         await manager.task
     state = manager.status("child-1", notice)
     expected = mod.system_reply_deadline(notice)
+    assert expected == {
+        "date": notice.deadline.isoformat(),
+        "time": None,
+        "kind": "reply",
+        "sources": [{"attachment_id": "notice", "page": 0}],
+    }
     assert state["primary_deadline"] == expected
     assert set(state["summary"]) == set(mod.SECTIONS)
-    assert notice.deadline.isoformat()[:10] != deadline["date"]
     await manager.async_close()
     restored = mod.AnalysisManager(hass, "ai-deadline", SimpleNamespace(), OPTIONS)
     await restored.async_initialize()
