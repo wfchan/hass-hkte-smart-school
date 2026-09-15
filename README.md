@@ -114,7 +114,7 @@ For the recommended dashboard experience, add
 resource. Add `custom:hkte-notices-card` to a dashboard; it discovers every
 child's notice-content sensor automatically, or accepts an explicit `entities`
 list. It supports all/unread filtering, expandable bodies and attachment
-metadata. The current pairing is card **0.4.1** with integration **0.6.1**;
+metadata. The current pairing is card **0.4.2** with integration **0.6.2**;
 automatic analysis of new notices is optional, queued FIFO and silent during the
 first baseline sync.
 The default remains five notices with the latest expanded; existing explicit
@@ -150,7 +150,7 @@ content and never loads embedded links or images.
 
 ## Attachment downloads and AI summaries
 
-Install integration **0.6.1** and card **0.4.1** together. The download icon next
+Install integration **0.6.2** and card **0.4.2** together. The download icon next
 to each attachment uses your HA login and entity read permission. The server
 checks notice/attachment ownership, obtains a fresh HKTE `uHubSid`, and requests
 the verified HTTPS storage endpoint with `itemid` and `sid`. URLs, cookies and
