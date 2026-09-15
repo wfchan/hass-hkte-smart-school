@@ -114,7 +114,7 @@ For the recommended dashboard experience, add
 resource. Add `custom:hkte-notices-card` to a dashboard; it discovers every
 child's notice-content sensor automatically, or accepts an explicit `entities`
 list. It supports all/unread filtering, expandable bodies and attachment
-metadata. The current pairing is card **0.4.2** with integration **0.6.2**;
+metadata. The current pairing is card **0.4.3** with integration **0.6.2**;
 automatic analysis of new notices is optional, queued FIFO and silent during the
 first baseline sync.
 The default remains five notices with the latest expanded; existing explicit
