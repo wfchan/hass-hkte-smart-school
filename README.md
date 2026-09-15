@@ -6,60 +6,6 @@ An unofficial Home Assistant integration for the HKTE Smart School
 parent app. It exposes a device for each child with notice, message and homework
 summary sensors, deadline calendars and a new-item event entity.
 
-## 繁體中文說明
-
-這是一個非官方 Home Assistant 整合，連接 HKTE Smart School 家長應用程式。每位子女會建立一個裝置，提供通告、訊息及功課摘要感測器、截止日期日曆及新項目事件；可選擇啟用經確認的通告簽署。專案與 HKTE 或 HKT Education 沒有關聯、授權或支援關係，所使用的非公開介面可能隨時變更。
-
-### 功能
-
-- 未讀及未回覆通告數量，以及通告正文
-- 未讀訊息數量
-- 未提交、逾期及緊急功課數量
-- 下一份功課截止時間感測器
-- 唯讀通告及功課截止日期日曆
-- `notice`、`message` 及 `homework` 新項目事件
-- 英文及繁體中文翻譯、設定流程及重新驗證
-- 5 至 60 分鐘更新間隔（預設 15 分鐘）
-- 每個檔案最多 20 MiB 的驗證附件下載
-- 通告正文及 PDF/JPEG/PNG 附件的手動 AI 摘要
-- 可選的新增通告 FIFO 自動 AI 分析，同一帳戶一次只處理一份
-
-背景同步維持唯讀，不會標記已讀、簽署、提交功課或付款。
-
-### 通告簽署（可選）
-
-
-可簽署時卡片顯示「簽署通告」。請閱讀表格、親自選擇答案，再檢查回覆及確認簽署。支援知悉、單選、多選、文字、數量及條件題；不預選答案或由 AI 代答。付款、上傳、特殊或過期表格按 API 規則阻擋，請使用官方 App。簽署後無法在此撤銷或修改。
-
-HA 登入及實體控制權限都必須通過驗證。AI API key 只用於 AI 分析並留在後端；直接簽署不需要另一個 API key。為防止重複提交，確認的答案、備註及操作 UUID 會先寫入本機私人 Store。結果不明時保留原操作，至少等候五分鐘後按「檢查結果」，不建立新簽署。最多保留 500 筆記錄，達上限時阻止新增操作；請保護 `.storage` 及備份。
-
-
-### 使用 HACS 安裝
-
-上方的 HACS 按鈕可直接開啟此整合的安裝頁。也可在 HACS 的 **Integrations > Custom repositories** 加入 `https://github.com/wfchan/hass-hkte-smart-school`，下載 **HKTE Smart School** 後重新啟動 Home Assistant，再到 **設定 > 裝置與服務** 加入整合。每個 Home Assistant 只可設定一個 HKTE 帳戶。
-
-### 通告正文及卡片
-
-每位子女的 **Notice content** 感測器會在 `notices` 屬性提供最多 20 份最新通告，包含標題、純文字正文、日期及已讀/回覆狀態。建議另外從 HACS 安裝 [HKTE Smart School Notices Card](https://github.com/wfchan/hass-hkte-smart-school-card)（類別 **Plugin**），再加入 `custom:hkte-notices-card`。卡片會自動尋找所有子女，預設顯示五份通告並展開最新一份，也支援篩選、附件 metadata、下載及 AI 分析。
-
-正文上限為 20,000 個字元；HTML 會轉為純文字，附件 metadata 只包括 ID、檔名、MIME 類型及大小。閱讀或展開不會改變 HKTE 狀態。
-
-### 附件下載及 AI 摘要
-
-附件下載使用 Home Assistant 登入及實體讀取權限，伺服器會驗證通告/附件歸屬、取得 `uHubSid` 並拒絕轉址、空回應及錯誤頁面。每個檔案上限 20 MiB，URL、cookie 及 session token 不會傳到瀏覽器。
-
-在整合選項啟用 AI，輸入 Base URL、API key 及支援圖片的模型。下載不需要啟用 AI。**目前只測試及支援 MiniMax-M3**；其他 OpenAI-compatible model 尚未測試，日後會逐步驗證。按「AI 整理重點」才會手動分析；如開啟自動分析，新通告會 FIFO 逐份處理，首次同步只建立基線。
-
-摘要以繁體中文提供內容重點、重要日期、費用、家長待辦及需確認事項。每次最多 10 個附件、40 MiB 及 20 頁；損壞、加密或不支援檔案會列明遺漏。摘要只在 Home Assistant 本機保留 30 天（最多 200 份），不寫入 Recorder；原檔只在處理期間暫存。
-
-通告卡的回覆限期以 HKTE 系統設定為準，不受 AI 分析狀態影響。若 PDF 或正文日期不同，AI 摘要會提示差異並以系統日期為準；活動及交件日期另外列出。系統沒有提供回覆限期時會明確顯示未提供。舊摘要可按「重新分析」套用此規則。
-
-The card uses the HKTE system's configured reply deadline, regardless of AI analysis status. When the PDF or body differs, AI summaries flag the discrepancy and give precedence to the system date. Event and submission dates remain separate. Missing system deadlines are shown as not provided. Analyze older summaries again to apply this rule.
-
-### 私隱及支援
-
-登入資料及 AI key 儲存在 Home Assistant 標準 config-entry storage，請保護 `.storage`、備份及管理員權限。日誌及 diagnostics 不包含憑證、cookie、子女姓名、學校名稱或通告正文。最低支援 Home Assistant **2026.8.0**；問題請使用 [GitHub Issues](https://github.com/wfchan/hass-hkte-smart-school/issues)，不要附上私人資料。
-
 > [!IMPORTANT]
 > This community project is not affiliated with, endorsed by or supported by
 > HKTE or HKT Education. It uses an undocumented interface used by the parent
@@ -139,7 +85,12 @@ calling HKTE. A successful request remains pending for at least five minutes;
 only a later read-only `GetNoticeReply` check can confirm the result. Timeout,
 connection loss or an incomplete response is marked unknown and is never
 resent automatically. Opening the form does not mark a notice read, and the
-card requires entity control permission for all signing endpoints.
+card requires entity control permission for all signing endpoints. Direct
+signing reuses the existing HKTE session, so it needs no additional API key or
+bridge service.
+
+The operation store keeps at most 500 records and refuses new signing
+operations once it is full. Protect `.storage` and backups.
 
 Each body is limited to 20,000 characters, with `content_truncated` indicating
 truncation. A missing body is explicitly shown as unavailable. Attachment
@@ -150,7 +101,7 @@ content and never loads embedded links or images.
 
 ## Attachment downloads and AI summaries
 
-Install integration **0.6.2** and card **0.4.2** together. The download icon next
+Install integration **0.6.2** and card **0.4.3** together. The download icon next
 to each attachment uses your HA login and entity read permission. The server
 checks notice/attachment ownership, obtains a fresh HKTE `uHubSid`, and requests
 the verified HTTPS storage endpoint with `itemid` and `sid`. URLs, cookies and
@@ -167,20 +118,21 @@ Use HTTPS for remote services; HTTP is supported for trusted local services but
 does not encrypt documents or credentials in transit. A blank API-key field
 keeps the existing key. Disable AI to stop new analyses; downloads still work.
 
-目前正式測試及支援的 AI model 只有 **MiniMax-M3**。其他 OpenAI-compatible
-model 尚未測試，不保證能正確處理圖片輸入或輸出格式；後續會逐步加入及驗證
-更多 model。OpenAI-compatible transport does **not** mean every model supports images or
-structured output. The integration requests a strict JSON schema, then validates
+**MiniMax-M3** is the only model tested and supported so far. Other
+OpenAI-compatible models are untested and are not guaranteed to handle image
+input or structured output correctly. OpenAI-compatible transport does **not**
+mean every model supports images or structured output. The integration requests
+a strict JSON schema, then validates
 all five sections, text limits and source/page references locally. Only an
 explicit unsupported-format-parameter error permits a prompt-only fallback;
 images are never silently removed. Invalid summary structure gets one retry.
 Truncated or refused responses are rejected and existing summaries are preserved.
 The card independently validates API data and displays empty sections as
-"Not provided" / "未提供", without rendering model HTML or reasoning.
+"Not provided", without rendering model HTML or reasoning.
 
-**MiniMax-M3**, using `https://api.minimax.io/v1`, passed live synthetic-image
-tests on 2026-09-09. The integration automatically sets `reasoning_split: true`
-for this official host, as described in the
+MiniMax-M3 with `https://api.minimax.io/v1` passed live synthetic-image tests on
+2026-09-09. The integration automatically sets `reasoning_split: true` for this
+official host, as described in the
 [MiniMax OpenAI compatibility documentation](https://platform.minimax.io/docs/api-reference/text-openai-api).
 Some providers ignore JSON schema hints; local validation is still mandatory.
 These synthetic tests do not certify factual accuracy or every document layout.
@@ -190,7 +142,7 @@ The icon shown above is original, unofficial generated artwork for this communit
 integration. It is not an HKTE or school logo and contains no student data,
 credentials or provider content.
 
-Select **AI 整理重點** on a notice to send its text, attachment filenames and
+Select **AI summary** on a notice to send its text, attachment filenames and
 rendered pages to **your configured AI provider**. This explicitly discloses
 private school documents: select a provider whose privacy/retention policy you
 accept. This is manual unless automatic new-notice analysis is enabled in the
@@ -198,6 +150,12 @@ integration options. Summaries are in Traditional Chinese,
 with highlights, important dates, costs, parent actions, questions and page
 citations. Missing dates/costs must be marked as not provided. Always verify AI
 output against the original; the integration does not pay, reply or submit.
+
+The card uses the HKTE system's configured reply deadline, regardless of AI
+analysis status. When the PDF or body differs, AI summaries flag the
+discrepancy and give precedence to the system date. Event and submission dates
+remain separate. Missing system deadlines are shown as not provided. Analyze
+older summaries again to apply this rule.
 
 Each analysis permits at most **10 attachments, 40 MiB total and 20 pages**.
 Limits fail explicitly; no pages are silently dropped. Corrupt, encrypted and
@@ -214,12 +172,6 @@ and do not enter Recorder. Original files are held only in bounded memory during
 download/rendering and released on success, failure or cancellation; there is no
 server-side file archive. An executor already rendering a page finishes before
 its memory can be released. Files saved by your browser are yours to manage.
-
-繁體中文：在整合選項填寫 AI Base URL、API key 及支援圖片的模型，啟用後才可手動
-按「AI 整理重點」。目前只支援及測試 MiniMax-M3，其他 model 尚未測試，日後會逐步
-加入新的支援。通告正文及附件頁面會傳送至你指定的服務；請先確認其私隱政策。
-下載不需要啟用 AI。摘要保留 30 天；可另行開啟「收到新通告時自動進行 AI 分析」，
-新通告會按順序逐份處理，首次同步只建立基線，不會分析現有通告；不會付款、簽署或標記通告已讀。
 
 ## New-item automations
 
