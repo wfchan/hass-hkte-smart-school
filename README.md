@@ -262,7 +262,7 @@ attachments in an issue.
 
 ## Community
 
-[Telegram Group](https://t.me/smarthomehk)
+如有任何意見，歡迎加入 [Telegram Group](https://t.me/smarthomehk)
 
 ## License
 
