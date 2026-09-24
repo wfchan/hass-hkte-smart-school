@@ -70,10 +70,9 @@ The companion card shows the latest notices and their status:
 
 ![HKTE notices card showing notice titles, issue dates and status icons](screenshots/notice-list.png)
 
-Expand a notice to see its reply deadline, signing action, content and AI
-highlights:
+Expand a notice to see its reply deadline, content and AI highlights:
 
-![Expanded HKTE notice showing the reply deadline, signing action and AI highlights](screenshots/notice-expanded.png)
+![Expanded HKTE notice showing the reply deadline, content and AI highlights](screenshots/notice-expanded.png)
 
 As a dependency-free fallback, add a **Manual** card using
 [examples/notices-card.yaml](examples/notices-card.yaml). It automatically
