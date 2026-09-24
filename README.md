@@ -66,6 +66,15 @@ first baseline sync.
 The default remains five notices with the latest expanded; existing explicit
 card settings are preserved.
 
+The companion card shows the latest notices and their status:
+
+![HKTE notices card showing notice titles, issue dates and status icons](screenshots/notice-list.png)
+
+Expand a notice to see its reply deadline, signing action, content and AI
+highlights:
+
+![Expanded HKTE notice showing the reply deadline, signing action and AI highlights](screenshots/notice-expanded.png)
+
 As a dependency-free fallback, add a **Manual** card using
 [examples/notices-card.yaml](examples/notices-card.yaml). It automatically
 finds all children and expands the latest notice.
@@ -79,6 +88,14 @@ choose **Review reply**, and only then choose **Confirm and sign**. Supported
 forms are acknowledgement, single and multiple choice, text, quantities and
 verified conditional questions. Payment, upload, unknown, nested and expired
 forms remain unavailable and must be completed in the official HKTE app.
+
+The card displays answer choices in a signing dialog:
+
+![HKTE signing dialog with answer choices and a Review reply button](screenshots/signing-dialog.png)
+
+Longer forms can include multiple choices and text fields:
+
+![HKTE signing form with session choices and parent contact fields](screenshots/signing-form.png)
 
 The integration stores the reviewed payload in a private local Store before
 calling HKTE. A successful request remains pending for at least five minutes;
@@ -243,6 +260,10 @@ The minimum supported Home Assistant version is **2026.8.0**. Please use
 [GitHub Issues](https://github.com/wfchan/hass-hkte-smart-school/issues) for bug
 reports. Never include credentials, cookies, student details, notice text or
 attachments in an issue.
+
+## Community
+
+[Telegram Group](https://t.me/smarthomehk)
 
 ## License
 
